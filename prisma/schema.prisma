@@ -1,0 +1,177 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ClickUp Team Member
+model TeamMember {
+  id              String        @id @default(cuid())
+  clickupId       Int           @unique
+  username        String
+  email           String?
+  profilePicture  String?
+  role            String?
+
+  // Work expectations
+  expectedHoursPerDay   Float   @default(8.0)
+  expectedHoursPerWeek  Float   @default(40.0)
+
+  // Relationships
+  timeEntries     TimeEntry[]
+  dailySummaries  DailySummary[]
+  weeklySummaries WeeklySummary[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([clickupId])
+  @@index([email])
+}
+
+// ClickUp Time Entry
+model TimeEntry {
+  id              String        @id @default(cuid())
+  clickupId       String        @unique
+
+  // User reference
+  teamMemberId    String
+  teamMember      TeamMember    @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  // Time tracking
+  duration        Int           // Duration in milliseconds
+  startDate       DateTime
+  endDate         DateTime?
+
+  // Task/Project metadata
+  taskId          String?
+  taskName        String?
+  projectId       String?
+  projectName     String?
+  listId          String?
+  listName        String?
+
+  // Logging metadata
+  loggedAt        DateTime      // When the entry was created in ClickUp
+  isBackfilled    Boolean       @default(false) // Whether logged after the work day
+
+  // Billing/tags
+  billable        Boolean       @default(false)
+  tags            String?       // JSON array of tags
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([teamMemberId])
+  @@index([startDate])
+  @@index([taskId])
+  @@index([projectId])
+}
+
+// Daily Summary for each team member
+model DailySummary {
+  id              String        @id @default(cuid())
+
+  // User reference
+  teamMemberId    String
+  teamMember      TeamMember    @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  // Date
+  date            DateTime      // The work day being summarized
+
+  // Metrics
+  totalHours      Float         // Total hours logged
+  entryCount      Int           // Number of time entries
+  sameDayEntries  Int           // Entries logged same day
+  backfilledEntries Int         // Entries logged later
+
+  // Compliance
+  complianceStatus String       // "FULLY_COMPLIANT", "PARTIALLY_COMPLIANT", "NON_COMPLIANT"
+  meetsMinimum    Boolean       // >= 6 hours
+  isSameDay       Boolean       // Logged same day
+
+  // Utilization
+  utilizationPercent Float       // (totalHours / expectedHours) * 100
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([teamMemberId, date])
+  @@index([date])
+  @@index([complianceStatus])
+}
+
+// Weekly Summary for each team member
+model WeeklySummary {
+  id              String        @id @default(cuid())
+
+  // User reference
+  teamMemberId    String
+  teamMember      TeamMember    @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  // Week identification
+  weekStartDate   DateTime      // Monday of the week
+  weekEndDate     DateTime      // Friday of the week
+  year            Int
+  weekNumber      Int
+
+  // Metrics
+  totalHours      Float         // Total hours logged in week
+  activeDays      Int           // Days with logged time (out of 5)
+  entryCount      Int           // Total entries
+  backfilledCount Int           // Backfilled entries
+
+  // Compliance
+  complianceStatus String       // "FULLY_COMPLIANT", "PARTIALLY_COMPLIANT", "NON_COMPLIANT"
+  meetsActiveThreshold Boolean  // >= 4 out of 5 days
+  limitedBackfilling Boolean    // Acceptable backfill ratio
+
+  // Utilization
+  utilizationPercent Float       // (totalHours / expectedWeeklyHours) * 100
+  utilizationCategory String     // "UNDER", "HEALTHY", "OVER"
+
+  // Risk signals
+  hasUnderLogging Boolean       @default(false)
+  hasOverwork     Boolean       @default(false)
+  hasExcessiveBackfill Boolean  @default(false)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([teamMemberId, year, weekNumber])
+  @@index([weekStartDate])
+  @@index([complianceStatus])
+}
+
+// Configuration for work expectations and settings
+model Configuration {
+  id              String        @id @default(cuid())
+  key             String        @unique
+  value           String        // JSON value
+  description     String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// Sync log to track API sync operations
+model SyncLog {
+  id              String        @id @default(cuid())
+  syncType        String        // "TEAM_MEMBERS", "TIME_ENTRIES", "FULL"
+  status          String        // "SUCCESS", "FAILED", "PARTIAL"
+  startedAt       DateTime
+  completedAt     DateTime?
+  recordsProcessed Int          @default(0)
+  errorMessage    String?
+
+  createdAt       DateTime      @default(now())
+
+  @@index([syncType])
+  @@index([status])
+  @@index([startedAt])
+}
