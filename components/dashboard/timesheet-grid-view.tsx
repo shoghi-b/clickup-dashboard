@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 
 interface DailySummary {
   id: string;
@@ -15,6 +16,17 @@ interface DailySummary {
     email: string | null;
     profilePicture: string | null;
   };
+}
+
+interface AttendanceRecord {
+  id: string;
+  employeeName: string;
+  employeeCode: string | null;
+  date: string;
+  firstIn: string | null;
+  lastOut: string | null;
+  totalHours: number;
+  status: 'PRESENT' | 'ABSENT' | 'PARTIAL';
 }
 
 interface TeamMember {
@@ -33,10 +45,19 @@ interface TimesheetGridViewProps {
   selectedMembers: string[];
 }
 
+interface DayData {
+  clickupHours: number;
+  attendanceHours: number;
+  attendanceStatus: 'PRESENT' | 'ABSENT' | 'PARTIAL' | null;
+  firstIn: string | null;
+  lastOut: string | null;
+}
+
 interface TeamMemberRow {
   member: TeamMember;
-  dailyHours: Map<string, number>;
-  weekTotal: number;
+  dailyData: Map<string, DayData>;
+  weekTotalClickup: number;
+  weekTotalAttendance: number;
 }
 
 export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridViewProps) {
@@ -57,21 +78,37 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
   const fetchTimesheetData = async () => {
     setLoading(true);
     try {
+      // Get the week start and end dates
+      const weekStart = startOfWeek(dateRange.from, { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(dateRange.from, { weekStartsOn: 1 });
+
       // Fetch team members
       const membersResponse = await fetch('/api/team-members');
       const membersResult = await membersResponse.json();
 
-      // Fetch daily summaries
+      // Fetch daily summaries (ClickUp data) - use full week range
       const params = new URLSearchParams({
-        startDate: dateRange.from.toISOString(),
-        endDate: dateRange.to.toISOString(),
+        startDate: weekStart.toISOString(),
+        endDate: weekEnd.toISOString(),
       });
       const summariesResponse = await fetch(`/api/analytics/daily?${params}`);
       const summariesResult = await summariesResponse.json();
 
+      // Fetch attendance records - use full week range
+      const attendanceResponse = await fetch(`/api/attendance/records?${params}`);
+      const attendanceResult = await attendanceResponse.json();
+
+      console.log('Attendance API Response:', attendanceResult);
+
       if (membersResult.success && summariesResult.success) {
         const members: TeamMember[] = membersResult.data;
         const summaries: DailySummary[] = summariesResult.data;
+        const attendanceRecords: AttendanceRecord[] = attendanceResult.success ? attendanceResult.records : [];
+
+        console.log('Attendance records count:', attendanceRecords.length);
+        if (attendanceRecords.length > 0) {
+          console.log('Sample attendance record:', attendanceRecords[0]);
+        }
 
         // Filter members based on selection
         const filteredMembers = members.filter(member =>
@@ -80,21 +117,68 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
 
         // Build the grid data
         const gridData: TeamMemberRow[] = filteredMembers.map(member => {
-          const dailyHours = new Map<string, number>();
-          let weekTotal = 0;
+          const dailyData = new Map<string, DayData>();
+          let weekTotalClickup = 0;
+          let weekTotalAttendance = 0;
 
+          // Add ClickUp data
           summaries
             .filter(s => s.teamMemberId === member.id)
             .forEach(summary => {
               const dateKey = format(new Date(summary.date), 'yyyy-MM-dd');
-              dailyHours.set(dateKey, summary.totalHours);
-              weekTotal += summary.totalHours;
+              const existing = dailyData.get(dateKey) || {
+                clickupHours: 0,
+                attendanceHours: 0,
+                attendanceStatus: null,
+                firstIn: null,
+                lastOut: null,
+              };
+              existing.clickupHours = summary.totalHours;
+              dailyData.set(dateKey, existing);
+              weekTotalClickup += summary.totalHours;
             });
+
+          // Add Attendance data (match by username - flexible matching)
+          const matchedRecords = attendanceRecords.filter(record => {
+            const attendanceName = record.employeeName.toLowerCase().trim();
+            const memberName = member.username.toLowerCase().trim();
+            // Check if attendance name is contained in member name or vice versa
+            return memberName.includes(attendanceName) || attendanceName.includes(memberName);
+          });
+
+          if (matchedRecords.length > 0) {
+            console.log(`Matched ${matchedRecords.length} attendance records for ${member.username}`);
+          }
+
+          matchedRecords.forEach(record => {
+            const recordDate = new Date(record.date);
+            const dateKey = format(recordDate, 'yyyy-MM-dd');
+
+            // Only process records within the current week
+            if (recordDate >= weekStart && recordDate <= weekEnd) {
+              const existing = dailyData.get(dateKey) || {
+                clickupHours: 0,
+                attendanceHours: 0,
+                attendanceStatus: null,
+                firstIn: null,
+                lastOut: null,
+              };
+              existing.attendanceHours = record.totalHours;
+              existing.attendanceStatus = record.status;
+              existing.firstIn = record.firstIn;
+              existing.lastOut = record.lastOut;
+              dailyData.set(dateKey, existing);
+
+              // Only add to weekly total if it's within the current week
+              weekTotalAttendance += record.totalHours;
+            }
+          });
 
           return {
             member,
-            dailyHours,
-            weekTotal,
+            dailyData,
+            weekTotalClickup,
+            weekTotalAttendance,
           };
         });
 
@@ -107,24 +191,37 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
     }
   };
 
-  const getHoursForDay = (row: TeamMemberRow, day: Date): number => {
+  const getDataForDay = (row: TeamMemberRow, day: Date): DayData => {
     const dateKey = format(day, 'yyyy-MM-dd');
-    return row.dailyHours.get(dateKey) || 0;
+    return row.dailyData.get(dateKey) || {
+      clickupHours: 0,
+      attendanceHours: 0,
+      attendanceStatus: null,
+      firstIn: null,
+      lastOut: null,
+    };
   };
 
   const formatHours = (hours: number): string => {
-    if (hours === 0) return '0h';
+    if (hours === 0) return '-';
     const h = Math.floor(hours);
     const m = Math.round((hours - h) * 60);
     if (m === 0) return `${h}h`;
     return `${h}h ${m}m`;
   };
 
-  const getCellColor = (hours: number): string => {
+  const getClickupCellColor = (hours: number): string => {
     if (hours === 0) return 'bg-gray-50 text-gray-400';
     if (hours < 6) return 'bg-blue-50 text-blue-700';
     if (hours >= 6 && hours <= 9) return 'bg-blue-100 text-blue-800';
     return 'bg-red-50 text-red-700'; // Over 9 hours
+  };
+
+  const getAttendanceCellColor = (status: 'PRESENT' | 'ABSENT' | 'PARTIAL' | null): string => {
+    if (!status) return 'bg-gray-50 text-gray-400';
+    if (status === 'PRESENT') return 'bg-green-100 text-green-800 border border-green-300';
+    if (status === 'PARTIAL') return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+    return 'bg-red-100 text-red-800 border border-red-300'; // ABSENT
   };
 
   if (loading) {
@@ -149,85 +246,138 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Team Timesheet Grid</CardTitle>
-        <CardDescription>
-          {format(weekDays[0], 'MMM d')} - {format(weekDays[weekDays.length - 1], 'MMM d, yyyy')}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left p-3 font-medium text-gray-700 sticky left-0 bg-white z-10">
-                  People ({teamData.length})
-                </th>
-                {weekDays.map(day => {
-                  const isWeekend = day.getDay() === 0 || day.getDay() === 6; // Sunday or Saturday
-                  return (
-                    <th
-                      key={day.toISOString()}
-                      className={`text-center p-3 font-medium min-w-[100px] ${
-                        isWeekend ? 'bg-gray-50 text-gray-600' : 'text-gray-700'
-                      }`}
-                    >
-                      <div>{format(day, 'EEE, MMM d')}</div>
-                    </th>
-                  );
-                })}
-                <th className="text-center p-3 font-medium text-gray-700 min-w-[100px]">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teamData.map(row => (
-                <tr key={row.member.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 sticky left-0 bg-white z-10">
-                    <div className="flex items-center gap-2">
-                      {row.member.profilePicture ? (
-                        <img
-                          src={row.member.profilePicture}
-                          alt={row.member.username}
-                          className="w-8 h-8 rounded-full"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
-                          {row.member.username.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-medium text-gray-900">{row.member.username}</div>
-                        <div className="text-xs text-gray-500">40h</div>
-                      </div>
-                    </div>
-                  </td>
+    <TooltipProvider>
+      <Card>
+        <CardHeader>
+          <CardTitle>Team Timesheet & Attendance Grid</CardTitle>
+          <CardDescription>
+            {format(weekDays[0], 'MMM d')} - {format(weekDays[weekDays.length - 1], 'MMM d, yyyy')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b-2">
+                  <th className="text-left p-3 font-medium text-gray-700 sticky left-0 bg-white z-10 border-r">
+                    People ({teamData.length})
+                  </th>
                   {weekDays.map(day => {
-                    const hours = getHoursForDay(row, day);
                     const isWeekend = day.getDay() === 0 || day.getDay() === 6;
                     return (
-                      <td
+                      <th
                         key={day.toISOString()}
-                        className={`p-2 text-center ${isWeekend ? 'bg-gray-50' : ''}`}
+                        colSpan={2}
+                        className={`text-center p-2 font-medium border-r ${
+                          isWeekend ? 'bg-gray-50 text-gray-600' : 'text-gray-700'
+                        }`}
                       >
-                        <div className={`rounded px-3 py-2 text-sm font-medium ${getCellColor(hours)}`}>
-                          {formatHours(hours)}
-                        </div>
-                      </td>
+                        <div className="text-sm">{format(day, 'EEE, MMM d')}</div>
+                      </th>
                     );
                   })}
-                  <td className="p-2 text-center">
-                    <div className="rounded px-3 py-2 text-sm font-medium bg-gray-100 text-gray-900">
-                      {formatHours(row.weekTotal)}
-                    </div>
-                  </td>
+                  <th colSpan={2} className="text-center p-2 font-medium text-gray-700">Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+                <tr className="border-b bg-gray-50">
+                  <th className="sticky left-0 bg-gray-50 z-10 border-r"></th>
+                  {weekDays.map(day => (
+                    <React.Fragment key={`sub-${day.toISOString()}`}>
+                      <th className="text-center p-2 text-xs font-medium text-gray-600 min-w-[80px]">
+                        ClickUp
+                      </th>
+                      <th className="text-center p-2 text-xs font-medium text-gray-600 min-w-[80px] border-r">
+                        Attendance
+                      </th>
+                    </React.Fragment>
+                  ))}
+                  <th className="text-center p-2 text-xs font-medium text-gray-600 min-w-[80px]">
+                    ClickUp
+                  </th>
+                  <th className="text-center p-2 text-xs font-medium text-gray-600 min-w-[80px]">
+                    Attendance
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamData.map(row => (
+                  <tr key={row.member.id} className="border-b hover:bg-gray-50/50">
+                    <td className="p-3 sticky left-0 bg-white z-10 border-r">
+                      <div className="flex items-center gap-2">
+                        {row.member.profilePicture ? (
+                          <img
+                            src={row.member.profilePicture}
+                            alt={row.member.username}
+                            className="w-8 h-8 rounded-full"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+                            {row.member.username.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-medium text-gray-900">{row.member.username}</div>
+                          <div className="text-xs text-gray-500">40h</div>
+                        </div>
+                      </div>
+                    </td>
+                    {weekDays.map(day => {
+                      const dayData = getDataForDay(row, day);
+                      const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                      return (
+                        <React.Fragment key={`data-${day.toISOString()}`}>
+                          {/* ClickUp Column */}
+                          <td className={`p-1 text-center ${isWeekend ? 'bg-gray-50' : ''}`}>
+                            <div className={`rounded px-2 py-1.5 text-xs font-medium ${getClickupCellColor(dayData.clickupHours)}`}>
+                              {formatHours(dayData.clickupHours)}
+                            </div>
+                          </td>
+                          {/* Attendance Column */}
+                          <td className={`p-1 text-center border-r ${isWeekend ? 'bg-gray-50' : ''}`}>
+                            {dayData.attendanceStatus ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className={`rounded px-2 py-1.5 text-xs font-medium cursor-help ${getAttendanceCellColor(dayData.attendanceStatus)}`}>
+                                    {formatHours(dayData.attendanceHours)}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="text-xs space-y-1">
+                                    <div className="font-semibold">{format(day, 'MMM d, yyyy')}</div>
+                                    <div>First IN: {dayData.firstIn || '--:--'}</div>
+                                    <div>Last OUT: {dayData.lastOut || '--:--'}</div>
+                                    <div>Total: {formatHours(dayData.attendanceHours)}</div>
+                                    <div className="font-medium">Status: {dayData.attendanceStatus}</div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <div className="rounded px-2 py-1.5 text-xs font-medium bg-gray-50 text-gray-400">
+                                -
+                              </div>
+                            )}
+                          </td>
+                        </React.Fragment>
+                      );
+                    })}
+                    {/* Total Columns */}
+                    <td className="p-1 text-center">
+                      <div className="rounded px-2 py-1.5 text-xs font-medium bg-blue-100 text-blue-900">
+                        {formatHours(row.weekTotalClickup)}
+                      </div>
+                    </td>
+                    <td className="p-1 text-center">
+                      <div className="rounded px-2 py-1.5 text-xs font-medium bg-gray-100 text-gray-900">
+                        {formatHours(row.weekTotalAttendance)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 }
 
