@@ -89,3 +89,60 @@ export interface RateLimitInfo {
   reset: number; // Unix timestamp
 }
 
+export interface ClickUpSpace {
+  id: string;
+  name: string;
+  private: boolean;
+  statuses?: Array<{
+    id: string;
+    status: string;
+    type: string;
+    orderindex: number;
+    color: string;
+  }>;
+  multiple_assignees?: boolean;
+  features?: {
+    due_dates?: {
+      enabled: boolean;
+      start_date: boolean;
+      remap_due_dates: boolean;
+      remap_closed_due_date: boolean;
+    };
+    time_tracking?: {
+      enabled: boolean;
+    };
+  };
+}
+
+export interface ClickUpList {
+  id: string;
+  name: string;
+  orderindex: number;
+  content?: string;
+  status?: {
+    status: string;
+    color: string;
+    hide_label: boolean;
+  };
+  priority?: {
+    priority: string;
+    color: string;
+  };
+  assignee?: ClickUpTeamMember | null;
+  task_count?: number;
+  due_date?: string;
+  start_date?: string;
+  folder?: {
+    id: string;
+    name: string;
+    hidden: boolean;
+    access: boolean;
+  };
+  space?: {
+    id: string;
+    name: string;
+    access: boolean;
+  };
+  archived: boolean;
+}
+

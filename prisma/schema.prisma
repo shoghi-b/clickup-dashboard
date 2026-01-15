@@ -56,6 +56,8 @@ model TimeEntry {
   projectName     String?
   listId          String?
   listName        String?
+  spaceId         String?
+  spaceName       String?
 
   // Logging metadata
   loggedAt        DateTime      // When the entry was created in ClickUp

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
+import { ProjectBreakdownSheet } from './project-breakdown-sheet';
 
 interface DailySummary {
   id: string;
@@ -64,6 +65,10 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
   const [teamData, setTeamData] = useState<TeamMemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekDays, setWeekDays] = useState<Date[]>([]);
+  const [projectBreakdownOpen, setProjectBreakdownOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<{ id: string; name: string } | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDateRange, setSelectedDateRange] = useState<{ start: Date; end: Date } | null>(null);
 
   useEffect(() => {
     // Calculate the week days to display (Monday to Sunday)
@@ -224,6 +229,24 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
     return 'bg-red-100 text-red-800 border border-red-300'; // ABSENT
   };
 
+  const handleDayClick = (member: TeamMember, day: Date, hours: number) => {
+    if (hours === 0) return; // Don't open for zero hours
+    setSelectedMember({ id: member.id, name: member.username });
+    setSelectedDate(day);
+    setSelectedDateRange(null);
+    setProjectBreakdownOpen(true);
+  };
+
+  const handleWeekTotalClick = (member: TeamMember, totalHours: number) => {
+    if (totalHours === 0) return; // Don't open for zero hours
+    const weekStart = startOfWeek(dateRange.from, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(dateRange.from, { weekStartsOn: 1 });
+    setSelectedMember({ id: member.id, name: member.username });
+    setSelectedDate(null);
+    setSelectedDateRange({ start: weekStart, end: weekEnd });
+    setProjectBreakdownOpen(true);
+  };
+
   if (loading) {
     return (
       <Card>
@@ -327,7 +350,10 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
                         <React.Fragment key={`data-${day.toISOString()}`}>
                           {/* ClickUp Column */}
                           <td className={`p-1 text-center ${isWeekend ? 'bg-gray-50' : ''}`}>
-                            <div className={`rounded px-2 py-1.5 text-xs font-medium ${getClickupCellColor(dayData.clickupHours)}`}>
+                            <div
+                              className={`rounded px-2 py-1.5 text-xs font-medium ${getClickupCellColor(dayData.clickupHours)} ${dayData.clickupHours > 0 ? 'cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all' : ''}`}
+                              onClick={() => handleDayClick(row.member, day, dayData.clickupHours)}
+                            >
                               {formatHours(dayData.clickupHours)}
                             </div>
                           </td>
@@ -361,7 +387,10 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
                     })}
                     {/* Total Columns */}
                     <td className="p-1 text-center">
-                      <div className="rounded px-2 py-1.5 text-xs font-medium bg-blue-100 text-blue-900">
+                      <div
+                        className={`rounded px-2 py-1.5 text-xs font-medium bg-blue-100 text-blue-900 ${row.weekTotalClickup > 0 ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all' : ''}`}
+                        onClick={() => handleWeekTotalClick(row.member, row.weekTotalClickup)}
+                      >
                         {formatHours(row.weekTotalClickup)}
                       </div>
                     </td>
@@ -377,6 +406,17 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
           </div>
         </CardContent>
       </Card>
+
+      {/* Project Breakdown Sheet */}
+      <ProjectBreakdownSheet
+        open={projectBreakdownOpen}
+        onOpenChange={setProjectBreakdownOpen}
+        teamMemberId={selectedMember?.id || null}
+        memberName={selectedMember?.name || ''}
+        date={selectedDate}
+        startDate={selectedDateRange?.start || null}
+        endDate={selectedDateRange?.end || null}
+      />
     </TooltipProvider>
   );
 }

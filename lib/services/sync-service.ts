@@ -13,11 +13,13 @@ function isSameDayUTC(date1: Date, date2: Date): boolean {
 export class SyncService {
   private clickupClient: ClickUpClient;
   private teamId: string;
+  private spaceCache: Map<string, string> = new Map();
+  private listCache: Map<string, string> = new Map();
 
   constructor(apiToken?: string, teamId?: string) {
     this.clickupClient = new ClickUpClient(apiToken);
     this.teamId = teamId || process.env.CLICKUP_TEAM_ID || '';
-    
+
     if (!this.teamId) {
       throw new Error('ClickUp Team ID is required');
     }
@@ -176,6 +178,46 @@ export class SyncService {
     });
   }
 
+  private async getSpaceName(spaceId: string): Promise<string | null> {
+    if (!spaceId) return null;
+
+    // Check cache first
+    if (this.spaceCache.has(spaceId)) {
+      return this.spaceCache.get(spaceId) || null;
+    }
+
+    // Fetch from API
+    try {
+      const space = await this.clickupClient.getSpace(spaceId);
+      this.spaceCache.set(spaceId, space.name);
+      return space.name;
+    } catch (error) {
+      console.warn(`Failed to fetch space ${spaceId}:`, error instanceof Error ? error.message : error);
+      this.spaceCache.set(spaceId, 'Unknown Space');
+      return 'Unknown Space';
+    }
+  }
+
+  private async getListName(listId: string): Promise<string | null> {
+    if (!listId) return null;
+
+    // Check cache first
+    if (this.listCache.has(listId)) {
+      return this.listCache.get(listId) || null;
+    }
+
+    // Fetch from API
+    try {
+      const list = await this.clickupClient.getList(listId);
+      this.listCache.set(listId, list.name);
+      return list.name;
+    } catch (error) {
+      console.warn(`Failed to fetch list ${listId}:`, error instanceof Error ? error.message : error);
+      this.listCache.set(listId, 'Unknown List');
+      return 'Unknown List';
+    }
+  }
+
   private async upsertTimeEntry(entry: ClickUpTimeEntry): Promise<void> {
     // Find the team member
     const teamMember = await prisma.teamMember.findUnique({
@@ -196,6 +238,40 @@ export class SyncService {
     // Determine if backfilled (logged after the work day) - use UTC comparison
     const isBackfilled = !isSameDayUTC(startDate, loggedAt);
 
+    // Check if entry exists and if space/list names need updating
+    const existingEntry = await prisma.timeEntry.findUnique({
+      where: { clickupId: entry.id },
+      select: { spaceId: true, spaceName: true, listId: true, listName: true },
+    });
+
+    // Fetch space and list names from API since they're not in the time entry response
+    // Only fetch if:
+    // 1. Entry doesn't exist, OR
+    // 2. Space/List ID has changed, OR
+    // 3. Space/List name is missing
+    let spaceName: string | null = null;
+    let listName: string | null = null;
+
+    if (entry.task_location?.space_id) {
+      if (!existingEntry ||
+          existingEntry.spaceId !== entry.task_location.space_id ||
+          !existingEntry.spaceName) {
+        spaceName = await this.getSpaceName(entry.task_location.space_id);
+      } else {
+        spaceName = existingEntry.spaceName;
+      }
+    }
+
+    if (entry.task_location?.list_id) {
+      if (!existingEntry ||
+          existingEntry.listId !== entry.task_location.list_id ||
+          !existingEntry.listName) {
+        listName = await this.getListName(entry.task_location.list_id);
+      } else {
+        listName = existingEntry.listName;
+      }
+    }
+
     await prisma.timeEntry.upsert({
       where: { clickupId: entry.id },
       update: {
@@ -205,7 +281,9 @@ export class SyncService {
         taskId: entry.task?.id,
         taskName: entry.task?.name,
         listId: entry.task_location?.list_id,
-        listName: entry.task_location?.list_name,
+        listName,
+        spaceId: entry.task_location?.space_id,
+        spaceName,
         billable: entry.billable,
         tags: JSON.stringify(entry.tags),
         loggedAt,
@@ -220,7 +298,9 @@ export class SyncService {
         taskId: entry.task?.id,
         taskName: entry.task?.name,
         listId: entry.task_location?.list_id,
-        listName: entry.task_location?.list_name,
+        listName,
+        spaceId: entry.task_location?.space_id,
+        spaceName,
         billable: entry.billable,
         tags: JSON.stringify(entry.tags),
         loggedAt,

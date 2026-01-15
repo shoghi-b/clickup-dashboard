@@ -3,6 +3,8 @@ import {
   ClickUpTimeEntriesResponse,
   ClickUpApiErrorResponse,
   RateLimitInfo,
+  ClickUpSpace,
+  ClickUpList,
 } from './types';
 
 const CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
@@ -156,6 +158,14 @@ export class ClickUpClient {
 
     const endpoint = `/team/${params.teamId}/time_entries?${queryParams.toString()}`;
     return this.request<ClickUpTimeEntriesResponse>(endpoint);
+  }
+
+  async getSpace(spaceId: string): Promise<ClickUpSpace> {
+    return this.request<ClickUpSpace>(`/space/${spaceId}`);
+  }
+
+  async getList(listId: string): Promise<ClickUpList> {
+    return this.request<ClickUpList>(`/list/${listId}`);
   }
 
   getRateLimitInfo(): RateLimitInfo | null {
