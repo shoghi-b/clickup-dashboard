@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker, DateRange } from '@/components/ui/date-range-picker';
+import { CustomDateRangePicker } from '@/components/ui/custom-date-range-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Sheet,
@@ -22,10 +23,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { RefreshCw, Users, Calendar, TrendingUp, Filter, ChevronDown, Clock, BarChart3 } from 'lucide-react';
+import { RefreshCw, Users, Calendar, TrendingUp, Filter, ChevronDown, Clock, BarChart3, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { TeamOverview } from '@/components/dashboard/team-overview';
 import { TimesheetGridView } from '@/components/dashboard/timesheet-grid-view';
 import { MonthGridView } from '@/components/dashboard/month-grid-view';
+import { ResetDataButton } from '@/components/dashboard/reset-data-button';
+
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, startOfYear, endOfYear, startOfQuarter, endOfQuarter, subMonths, subQuarters, subYears } from 'date-fns';
 
 interface DashboardStats {
@@ -60,6 +63,20 @@ export default function DashboardPage() {
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [syncSheetOpen, setSyncSheetOpen] = useState(false);
   const [showMemberFilter, setShowMemberFilter] = useState(false);
+
+  // Attendance upload state
+  const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false);
+  const [attendanceFile, setAttendanceFile] = useState<File | null>(null);
+  const [attendanceDateRange, setAttendanceDateRange] = useState<DateRange>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
+  const [uploadingAttendance, setUploadingAttendance] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{
+    success: boolean;
+    message: string;
+    summary?: any;
+  } | null>(null);
 
   // Update date range when view mode changes
   const handleViewModeChange = (mode: 'week' | 'month' | 'team') => {
@@ -183,6 +200,74 @@ export default function DashboardPage() {
     }
   };
 
+  const handleAttendanceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAttendanceFile(file);
+      setUploadResult(null);
+    }
+  };
+
+  const handleAttendanceUpload = async () => {
+    if (!attendanceFile) {
+      setUploadResult({
+        success: false,
+        message: 'Please select a file to upload'
+      });
+      return;
+    }
+
+    if (!attendanceDateRange.from || !attendanceDateRange.to) {
+      setUploadResult({
+        success: false,
+        message: 'Please select a date range'
+      });
+      return;
+    }
+
+    setUploadingAttendance(true);
+    setUploadResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', attendanceFile);
+      formData.append('startDate', attendanceDateRange.from.toISOString());
+      formData.append('endDate', attendanceDateRange.to.toISOString());
+
+      const response = await fetch('/api/attendance/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setUploadResult({
+          success: true,
+          message: 'Attendance data uploaded successfully!',
+          summary: result.summary
+        });
+        setAttendanceFile(null);
+        // Reset file input
+        const fileInput = document.getElementById('attendance-file-input') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+      } else {
+        setUploadResult({
+          success: false,
+          message: result.error || 'Failed to upload attendance data'
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading attendance:', error);
+      setUploadResult({
+        success: false,
+        message: 'An error occurred while uploading the file'
+      });
+    } finally {
+      setUploadingAttendance(false);
+    }
+  };
+
   const fetchStats = async () => {
     try {
       const params = new URLSearchParams({
@@ -266,6 +351,134 @@ export default function DashboardPage() {
                 <span>Last sync: {format(lastSync, 'MMM dd, yyyy HH:mm:ss')}</span>
               </div>
             )}
+
+            {/* Reset Database Button */}
+            <ResetDataButton />
+
+            {/* Attendance Upload Button */}
+            <Sheet open={attendanceSheetOpen} onOpenChange={setAttendanceSheetOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="border-2 border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white transition-all duration-300"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Attendance
+                </Button>
+              </SheetTrigger>
+
+              <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+                <SheetHeader className="space-y-2 pb-6 border-b">
+                  <SheetTitle className="text-2xl font-bold text-gray-900">Upload Attendance Sheet</SheetTitle>
+                  <SheetDescription className="text-gray-600">
+                    Upload your attendance XLS file and select the date range to process.
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="space-y-6 py-6">
+                  {/* File Upload */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Select File</h3>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-gray-900 transition-colors duration-300">
+                      <input
+                        id="attendance-file-input"
+                        type="file"
+                        accept=".xls,.xlsx"
+                        onChange={handleAttendanceFileChange}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="attendance-file-input"
+                        className="flex flex-col items-center justify-center cursor-pointer"
+                      >
+                        <FileSpreadsheet className="w-12 h-12 text-gray-400 mb-3" />
+                        <span className="text-sm font-medium text-gray-900 mb-1">
+                          {attendanceFile ? attendanceFile.name : 'Click to upload'}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          XLS or XLSX files only
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Date Range Selector */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Date Range</h3>
+                    <CustomDateRangePicker
+                      value={attendanceDateRange}
+                      onChange={setAttendanceDateRange}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Only data within this date range will be processed from the file.
+                    </p>
+                  </div>
+
+                  {/* Selected Period Display */}
+                  {attendanceDateRange.from && attendanceDateRange.to && (
+                    <div className="bg-gray-100 rounded-lg p-4 border border-gray-200">
+                      <p className="text-sm font-medium text-gray-900 mb-1">Selected Period</p>
+                      <p className="text-sm text-gray-600">
+                        {format(attendanceDateRange.from, 'MMM dd, yyyy')} - {format(attendanceDateRange.to, 'MMM dd, yyyy')}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Upload Result */}
+                  {uploadResult && (
+                    <div className={`rounded-lg p-4 border ${
+                      uploadResult.success
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-red-50 border-red-200'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        {uploadResult.success ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1">
+                          <p className={`text-sm font-medium ${
+                            uploadResult.success ? 'text-green-900' : 'text-red-900'
+                          }`}>
+                            {uploadResult.message}
+                          </p>
+                          {uploadResult.success && uploadResult.summary && (
+                            <div className="mt-3 space-y-1 text-xs text-green-800">
+                              <p>Total Records: {uploadResult.summary.totalRecords}</p>
+                              <p>Employees: {uploadResult.summary.employeeCount}</p>
+                              <p>Present: {uploadResult.summary.presentCount}</p>
+                              <p>Absent: {uploadResult.summary.absentCount}</p>
+                              <p>Partial: {uploadResult.summary.partialCount}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Upload Button */}
+                  <Button
+                    onClick={handleAttendanceUpload}
+                    disabled={!attendanceFile || uploadingAttendance}
+                    className="w-full bg-gray-900 hover:bg-gray-800 text-white py-6 text-base font-semibold transition-all duration-300 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploadingAttendance ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 mr-2" />
+                        Upload Attendance Data
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+
             <Sheet open={syncSheetOpen} onOpenChange={setSyncSheetOpen}>
               <SheetTrigger asChild>
                 <Button
