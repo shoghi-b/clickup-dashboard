@@ -23,11 +23,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { RefreshCw, Users, Calendar, TrendingUp, Filter, ChevronDown, Clock, BarChart3, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { RefreshCw, Users, Calendar, TrendingUp, Filter, ChevronDown, Clock, BarChart3, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, Activity } from 'lucide-react';
 import { TeamOverview } from '@/components/dashboard/team-overview';
 import { TimesheetGridView } from '@/components/dashboard/timesheet-grid-view';
 import { MonthGridView } from '@/components/dashboard/month-grid-view';
 import { ResetDataButton } from '@/components/dashboard/reset-data-button';
+import { WeeklyKPICards } from '@/components/dashboard/weekly-kpi-cards';
+import { RiskSignalsCard } from '@/components/dashboard/risk-signals-card';
+import { KPIDrillDownSheet } from '@/components/dashboard/kpi-drill-down-sheet';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, startOfYear, endOfYear, startOfQuarter, endOfQuarter, subMonths, subQuarters, subYears } from 'date-fns';
 
@@ -78,6 +82,13 @@ export default function DashboardPage() {
     summary?: any;
   } | null>(null);
 
+  // Weekly KPI state
+  const [weeklyKPIData, setWeeklyKPIData] = useState<any>(null);
+  const [loadingKPI, setLoadingKPI] = useState(false);
+  const [drillDownOpen, setDrillDownOpen] = useState(false);
+  const [drillDownMetric, setDrillDownMetric] = useState<string>('');
+  const [drillDownMembers, setDrillDownMembers] = useState<any[]>([]);
+
   // Update date range when view mode changes
   const handleViewModeChange = (mode: 'week' | 'month' | 'team') => {
     if (mode === 'team') return; // Don't change date range for team overview
@@ -100,6 +111,33 @@ export default function DashboardPage() {
     fetchStats();
     fetchTeamMembers();
   }, [dateRange]);
+
+  // Fetch KPI when date range or selected members change
+  useEffect(() => {
+    if (selectedMembers.length > 0) {
+      fetchWeeklyKPI();
+    }
+  }, [dateRange, selectedMembers]);
+
+  const fetchWeeklyKPI = async () => {
+    setLoadingKPI(true);
+    try {
+      const params = new URLSearchParams({
+        date: dateRange.from.toISOString(),
+        memberIds: selectedMembers.join(','),
+      });
+      const response = await fetch(`/api/weekly-kpi?${params}`);
+      const result = await response.json();
+
+      if (result.success) {
+        setWeeklyKPIData(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch weekly KPI:', error);
+    } finally {
+      setLoadingKPI(false);
+    }
+  };
 
   const fetchTeamMembers = async () => {
     try {
@@ -282,6 +320,77 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  const handleCardClick = (metric: string) => {
+    if (!weeklyKPIData) return;
+
+    let filteredMembers: any[] = [];
+    let title = '';
+    let description = '';
+
+    switch (metric) {
+      case 'attendanceCompliance':
+        filteredMembers = weeklyKPIData.members.filter((m: any) => !m.attendanceCompliance);
+        title = 'Attendance Compliance Issues';
+        description = 'Members with less than 4 days of attendance this week';
+        break;
+      case 'timesheetCompliance':
+        filteredMembers = weeklyKPIData.members.filter((m: any) => !m.timesheetCompliance);
+        title = 'Timesheet Compliance Issues';
+        description = 'Members with less than 4 days of proper logging this week';
+        break;
+      case 'presentNotLogged':
+        filteredMembers = weeklyKPIData.members.filter((m: any) =>
+          m.days.some((d: any) => d.isPresent && d.clickup < 1)
+        );
+        title = 'Present But Not Logged';
+        description = 'Members who were present but did not log time';
+        break;
+      case 'avgUtilization':
+        filteredMembers = weeklyKPIData.members;
+        title = 'Team Utilization';
+        description = 'All team members with their utilization rates';
+        break;
+      case 'overCapacity':
+        filteredMembers = weeklyKPIData.members.filter((m: any) => m.utilization > 85);
+        title = 'Over Capacity Members';
+        description = 'Members logging more than 85% utilization (burnout risk)';
+        break;
+      case 'underCapacity':
+        filteredMembers = weeklyKPIData.members.filter((m: any) => m.utilization < 60);
+        title = 'Under Capacity Members';
+        description = 'Members logging less than 60% utilization';
+        break;
+    }
+
+    setDrillDownMetric(metric);
+    setDrillDownMembers(
+      filteredMembers.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        status: m.status,
+        days: m.days,
+        total: m.total,
+        metric: m.utilization,
+      }))
+    );
+    setDrillDownOpen(true);
+  };
+
+  const getDayStatusColor = (status: string) => {
+    switch (status) {
+      case 'present':
+        return 'bg-green-100 text-green-800';
+      case 'absent':
+        return 'bg-red-100 text-red-800';
+      case 'partial':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'missing':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -759,7 +868,21 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Main Content */}
+        {/* Weekly KPI Cards - Only show for week view */}
+        {viewMode === 'week' && weeklyKPIData && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom duration-500 delay-500">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <WeeklyKPICards kpiData={weeklyKPIData.kpi} onCardClick={handleCardClick} />
+              </div>
+              <div>
+                <RiskSignalsCard signals={weeklyKPIData.riskSignals} insights={weeklyKPIData.insights} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content - Existing Tabs */}
         <Tabs
           defaultValue="week"
           className="space-y-6 animate-in fade-in slide-in-from-bottom duration-500 delay-500"
@@ -798,6 +921,42 @@ export default function DashboardPage() {
             <TeamOverview selectedMembers={selectedMembers} />
           </TabsContent>
         </Tabs>
+
+        {/* Drill-down Sheet */}
+        {weeklyKPIData && (
+          <KPIDrillDownSheet
+            open={drillDownOpen}
+            onOpenChange={setDrillDownOpen}
+            metric={drillDownMetric}
+            title={
+              drillDownMetric === 'attendanceCompliance'
+                ? 'Attendance Compliance Issues'
+                : drillDownMetric === 'timesheetCompliance'
+                ? 'Timesheet Compliance Issues'
+                : drillDownMetric === 'presentNotLogged'
+                ? 'Present But Not Logged'
+                : drillDownMetric === 'avgUtilization'
+                ? 'Team Utilization'
+                : drillDownMetric === 'overCapacity'
+                ? 'Over Capacity Members'
+                : 'Under Capacity Members'
+            }
+            description={
+              drillDownMetric === 'attendanceCompliance'
+                ? 'Members with less than 4 days of attendance this week'
+                : drillDownMetric === 'timesheetCompliance'
+                ? 'Members with less than 4 days of proper logging this week'
+                : drillDownMetric === 'presentNotLogged'
+                ? 'Members who were present but did not log time'
+                : drillDownMetric === 'avgUtilization'
+                ? 'All team members with their utilization rates'
+                : drillDownMetric === 'overCapacity'
+                ? 'Members logging more than 85% utilization (burnout risk)'
+                : 'Members logging less than 60% utilization'
+            }
+            members={drillDownMembers}
+          />
+        )}
       </div>
     </div>
   );

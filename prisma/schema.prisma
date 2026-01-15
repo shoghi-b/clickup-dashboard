@@ -26,6 +26,7 @@ model TeamMember {
   timeEntries     TimeEntry[]
   dailySummaries  DailySummary[]
   weeklySummaries WeeklySummary[]
+  kpiSummaries    MemberKPISummary[]
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -240,4 +241,132 @@ model AttendanceUpload {
 
   @@index([status])
   @@index([createdAt])
+}
+
+// Team KPI Summary - Aggregated accountability and capacity metrics
+model TeamKPISummary {
+  id              String        @id @default(cuid())
+
+  // Period identification
+  periodType      String        // "DAILY", "WEEKLY", "MONTHLY"
+  periodStart     DateTime
+  periodEnd       DateTime
+
+  // Accountability KPIs
+  attendanceComplianceRate    Float   @default(0)  // % of expected workdays with attendance
+  timesheetComplianceRate     Float   @default(0)  // % of expected workdays with min hours logged
+  presentNotLoggedCount       Int     @default(0)  // Count of members present but didn't log time
+
+  // Capacity KPIs
+  avgUtilization              Float   @default(0)  // Average utilization across team
+  overCapacityCount           Int     @default(0)  // Members logging above expected hours
+  underCapacityCount          Int     @default(0)  // Members logging below expected hours
+
+  // Risk Signals
+  lateLoggingCount            Int     @default(0)  // Members logging after 2+ days
+  zeroHourDaysCount           Int     @default(0)  // Instances of 0h days
+  weekendLoggingCount         Int     @default(0)  // Members logging on weekends
+
+  // Metadata
+  totalMembers                Int     @default(0)
+  activeMembersCount          Int     @default(0)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([periodType, periodStart])
+  @@index([periodType])
+  @@index([periodStart])
+}
+
+// Member KPI Summary - Individual accountability and capacity metrics
+model MemberKPISummary {
+  id              String        @id @default(cuid())
+
+  // Member reference
+  teamMemberId    String
+  teamMember      TeamMember    @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  // Period identification
+  periodType      String        // "DAILY", "WEEKLY", "MONTHLY"
+  periodStart     DateTime
+  periodEnd       DateTime
+
+  // Accountability KPIs
+  attendanceCompliance        Boolean @default(false)  // Was present on expected days
+  timesheetCompliance         Boolean @default(false)  // Logged min hours on expected days
+  presentNotLogged            Boolean @default(false)  // Present but didn't log time
+  attendanceDays              Int     @default(0)      // Days marked present
+  expectedWorkDays            Int     @default(0)      // Expected work days in period
+
+  // Capacity KPIs
+  utilization                 Float   @default(0)      // (Logged / Expected) * 100
+  utilizationStatus           String  @default("UNKNOWN") // "UNDER", "HEALTHY", "OVER"
+  totalHoursLogged            Float   @default(0)
+  expectedHours               Float   @default(0)
+
+  // Risk Signals
+  lateLoggingDays             Int     @default(0)      // Days logged after 2+ days
+  zeroHourDays                Int     @default(0)      // Days with 0 hours
+  weekendLoggingDays          Int     @default(0)      // Weekend days with logging
+  consecutiveZeroDays         Int     @default(0)      // Max consecutive 0h days
+
+  // Risk Flags
+  hasLateLoggingRisk          Boolean @default(false)
+  hasZeroHourRisk             Boolean @default(false)
+  hasWeekendRisk              Boolean @default(false)
+  hasBurnoutRisk              Boolean @default(false)  // Over capacity + weekend logging
+
+  // Insights
+  riskLevel                   String  @default("LOW")  // "LOW", "MEDIUM", "HIGH", "CRITICAL"
+  actionRequired              String? // Suggested action
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([teamMemberId, periodType, periodStart])
+  @@index([teamMemberId])
+  @@index([periodType])
+  @@index([periodStart])
+  @@index([riskLevel])
+}
+
+// Insights - Narrative layer for KPIs
+model Insight {
+  id              String        @id @default(cuid())
+
+  // Scope
+  scope           String        // "TEAM", "MEMBER", "DEPARTMENT"
+  scopeId         String?       // Team member ID if member-specific
+
+  // Period
+  periodType      String        // "DAILY", "WEEKLY", "MONTHLY"
+  periodStart     DateTime
+  periodEnd       DateTime
+
+  // Insight details
+  category        String        // "ACCOUNTABILITY", "CAPACITY", "RISK", "GENERAL"
+  severity        String        // "INFO", "WARNING", "CRITICAL"
+  title           String        // Short title
+  description     String        // Detailed explanation
+
+  // Metrics referenced
+  metrics         String?       // JSON object with relevant metrics
+
+  // Actions
+  suggestedActions String?      // JSON array of suggested actions
+
+  // Status
+  acknowledged    Boolean       @default(false)
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([scope])
+  @@index([periodStart])
+  @@index([category])
+  @@index([severity])
+  @@index([acknowledged])
 }
