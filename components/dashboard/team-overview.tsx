@@ -16,21 +16,29 @@ interface TeamMember {
   createdAt: string;
 }
 
-export function TeamOverview() {
+interface TeamOverviewProps {
+  selectedMembers: string[];
+}
+
+export function TeamOverview({ selectedMembers }: TeamOverviewProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchTeamMembers();
-  }, []);
+  }, [selectedMembers]);
 
   const fetchTeamMembers = async () => {
     try {
       const response = await fetch('/api/team-members');
       const result = await response.json();
-      
+
       if (result.success) {
-        setTeamMembers(result.data);
+        // Filter members based on selection
+        const filteredMembers = result.data.filter((member: TeamMember) =>
+          selectedMembers.includes(member.id)
+        );
+        setTeamMembers(filteredMembers);
       }
     } catch (error) {
       console.error('Failed to fetch team members:', error);

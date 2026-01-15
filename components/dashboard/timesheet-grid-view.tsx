@@ -30,6 +30,7 @@ interface TimesheetGridViewProps {
     from: Date;
     to: Date;
   };
+  selectedMembers: string[];
 }
 
 interface TeamMemberRow {
@@ -38,7 +39,7 @@ interface TeamMemberRow {
   weekTotal: number;
 }
 
-export function TimesheetGridView({ dateRange }: TimesheetGridViewProps) {
+export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridViewProps) {
   const [teamData, setTeamData] = useState<TeamMemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekDays, setWeekDays] = useState<Date[]>([]);
@@ -51,7 +52,7 @@ export function TimesheetGridView({ dateRange }: TimesheetGridViewProps) {
     setWeekDays(days);
 
     fetchTimesheetData();
-  }, [dateRange]);
+  }, [dateRange, selectedMembers]);
 
   const fetchTimesheetData = async () => {
     setLoading(true);
@@ -72,8 +73,13 @@ export function TimesheetGridView({ dateRange }: TimesheetGridViewProps) {
         const members: TeamMember[] = membersResult.data;
         const summaries: DailySummary[] = summariesResult.data;
 
+        // Filter members based on selection
+        const filteredMembers = members.filter(member =>
+          selectedMembers.includes(member.id)
+        );
+
         // Build the grid data
-        const gridData: TeamMemberRow[] = members.map(member => {
+        const gridData: TeamMemberRow[] = filteredMembers.map(member => {
           const dailyHours = new Map<string, number>();
           let weekTotal = 0;
 

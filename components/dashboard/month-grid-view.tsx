@@ -31,6 +31,7 @@ interface MonthGridViewProps {
     from: Date;
     to: Date;
   };
+  selectedMembers: string[];
 }
 
 interface TeamMemberRow {
@@ -45,7 +46,7 @@ interface WeekInfo {
   weekKey: string;
 }
 
-export function MonthGridView({ dateRange }: MonthGridViewProps) {
+export function MonthGridView({ dateRange, selectedMembers }: MonthGridViewProps) {
   const [teamData, setTeamData] = useState<TeamMemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [weeks, setWeeks] = useState<WeekInfo[]>([]);
@@ -68,7 +69,7 @@ export function MonthGridView({ dateRange }: MonthGridViewProps) {
 
     setWeeks(weekInfos);
     fetchMonthData();
-  }, [dateRange]);
+  }, [dateRange, selectedMembers]);
 
   const fetchMonthData = async () => {
     setLoading(true);
@@ -92,8 +93,13 @@ export function MonthGridView({ dateRange }: MonthGridViewProps) {
         const members: TeamMember[] = membersResult.data;
         const summaries: WeeklySummary[] = summariesResult.data;
 
+        // Filter members based on selection
+        const filteredMembers = members.filter(member =>
+          selectedMembers.includes(member.id)
+        );
+
         // Build the grid data
-        const gridData: TeamMemberRow[] = members.map(member => {
+        const gridData: TeamMemberRow[] = filteredMembers.map(member => {
           const weeklyHours = new Map<string, number>();
           let monthTotal = 0;
 
