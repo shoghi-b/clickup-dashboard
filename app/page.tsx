@@ -53,10 +53,8 @@ export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
-  const [dateRange, setDateRange] = useState<DateRange>({
-    from: startOfWeek(new Date(), { weekStartsOn: 1 }),
-    to: endOfWeek(new Date(), { weekStartsOn: 1 }),
-  });
+  // Initialize with null to prevent hydration mismatch, will be set in useEffect
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalTeamMembers: 0,
     complianceRate: 0,
@@ -71,10 +69,8 @@ export default function DashboardPage() {
   // Attendance upload state
   const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false);
   const [attendanceFile, setAttendanceFile] = useState<File | null>(null);
-  const [attendanceDateRange, setAttendanceDateRange] = useState<DateRange>({
-    from: startOfMonth(new Date()),
-    to: endOfMonth(new Date()),
-  });
+  // Initialize with null to prevent hydration mismatch, will be set in useEffect
+  const [attendanceDateRange, setAttendanceDateRange] = useState<DateRange | null>(null);
   const [uploadingAttendance, setUploadingAttendance] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
     success: boolean;
@@ -88,6 +84,22 @@ export default function DashboardPage() {
   const [drillDownOpen, setDrillDownOpen] = useState(false);
   const [drillDownMetric, setDrillDownMetric] = useState<string>('');
   const [drillDownMembers, setDrillDownMembers] = useState<any[]>([]);
+
+  // Initialize date ranges after mount to prevent hydration mismatch
+  useEffect(() => {
+    if (dateRange === null) {
+      setDateRange({
+        from: startOfWeek(new Date(), { weekStartsOn: 1 }),
+        to: endOfWeek(new Date(), { weekStartsOn: 1 }),
+      });
+    }
+    if (attendanceDateRange === null) {
+      setAttendanceDateRange({
+        from: startOfMonth(new Date()),
+        to: endOfMonth(new Date()),
+      });
+    }
+  }, []);
 
   // Update date range when view mode changes
   const handleViewModeChange = (mode: 'week' | 'month' | 'team') => {
@@ -108,18 +120,21 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchStats();
-    fetchTeamMembers();
+    if (dateRange) {
+      fetchStats();
+      fetchTeamMembers();
+    }
   }, [dateRange]);
 
   // Fetch KPI when date range or selected members change
   useEffect(() => {
-    if (selectedMembers.length > 0) {
+    if (selectedMembers.length > 0 && dateRange) {
       fetchWeeklyKPI();
     }
   }, [dateRange, selectedMembers]);
 
   const fetchWeeklyKPI = async () => {
+    if (!dateRange) return;
     setLoadingKPI(true);
     try {
       const params = new URLSearchParams({
@@ -255,7 +270,7 @@ export default function DashboardPage() {
       return;
     }
 
-    if (!attendanceDateRange.from || !attendanceDateRange.to) {
+    if (!attendanceDateRange || !attendanceDateRange.from || !attendanceDateRange.to) {
       setUploadResult({
         success: false,
         message: 'Please select a date range'
@@ -307,6 +322,7 @@ export default function DashboardPage() {
   };
 
   const fetchStats = async () => {
+    if (!dateRange) return;
     try {
       const params = new URLSearchParams({
         startDate: dateRange.from.toISOString(),
@@ -395,6 +411,7 @@ export default function DashboardPage() {
   };
 
   const handleSync = async () => {
+    if (!dateRange) return;
     setSyncing(true);
     setSyncSheetOpen(false);
     try {
@@ -524,7 +541,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Selected Period Display */}
-                  {attendanceDateRange.from && attendanceDateRange.to && (
+                  {attendanceDateRange && attendanceDateRange.from && attendanceDateRange.to && (
                     <div className="bg-gray-100 rounded-lg p-4 border border-gray-200">
                       <p className="text-sm font-medium text-gray-900 mb-1">Selected Period</p>
                       <p className="text-sm text-gray-600">
@@ -682,7 +699,7 @@ export default function DashboardPage() {
                   {/* Custom Date Range */}
                   <div className="space-y-3 pt-6 border-t">
                     <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Custom Date Range</h3>
-                    <DateRangePicker value={dateRange} onChange={setDateRange} mode={viewMode} />
+                    {dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} mode={viewMode} />}
                   </div>
 
                   {/* Selected Period */}
@@ -690,7 +707,7 @@ export default function DashboardPage() {
                     <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                       <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">Selected Period</p>
                       <p className="text-sm font-semibold text-gray-900">
-                        {format(dateRange.from, 'MMM dd, yyyy')} - {format(dateRange.to, 'MMM dd, yyyy')}
+                        {dateRange ? `${format(dateRange.from, 'MMM dd, yyyy')} - ${format(dateRange.to, 'MMM dd, yyyy')}` : 'Loading...'}
                       </p>
                     </div>
                     <Button
@@ -711,7 +728,7 @@ export default function DashboardPage() {
         {/* Filters */}
         <div className="flex items-center gap-4 flex-wrap animate-in fade-in slide-in-from-bottom duration-500 delay-150">
           <div className="flex-1 max-w-md">
-            <DateRangePicker value={dateRange} onChange={setDateRange} mode={viewMode} />
+            {dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} mode={viewMode} />}
           </div>
           <div className="flex-1 max-w-md relative">
             <DropdownMenu open={showMemberFilter} onOpenChange={setShowMemberFilter}>
@@ -768,7 +785,7 @@ export default function DashboardPage() {
                           toggleMemberSelection(member.id);
                         }}
                         className="mt-0.5"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation()}
                       />
                       <label
                         htmlFor={`member-${member.id}`}
@@ -813,10 +830,11 @@ export default function DashboardPage() {
             </DropdownMenu>
           </div>
           <p className="text-sm text-gray-500">
-            {viewMode === 'week'
-              ? `Week of ${format(dateRange.from, 'MMM dd')} - ${format(dateRange.to, 'MMM dd, yyyy')}`
-              : format(dateRange.from, 'MMMM yyyy')
-            }
+            {dateRange ? (
+              viewMode === 'week'
+                ? `Week of ${format(dateRange.from, 'MMM dd')} - ${format(dateRange.to, 'MMM dd, yyyy')}`
+                : format(dateRange.from, 'MMMM yyyy')
+            ) : 'Loading...'}
           </p>
         </div>
 
@@ -910,11 +928,11 @@ export default function DashboardPage() {
           </TabsList>
 
           <TabsContent value="week" className="space-y-4">
-            <TimesheetGridView dateRange={dateRange} selectedMembers={selectedMembers} />
+            {dateRange && <TimesheetGridView dateRange={dateRange} selectedMembers={selectedMembers} />}
           </TabsContent>
 
           <TabsContent value="month" className="space-y-4">
-            <MonthGridView dateRange={dateRange} selectedMembers={selectedMembers} />
+            {dateRange && <MonthGridView dateRange={dateRange} selectedMembers={selectedMembers} />}
           </TabsContent>
 
           <TabsContent value="team" className="space-y-4">

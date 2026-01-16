@@ -46,10 +46,17 @@ export async function GET(request: NextRequest) {
         startDate: dateFilter,
       },
       orderBy: [
-        { spaceName: 'asc' },
-        { listName: 'asc' },
         { startDate: 'asc' },
       ],
+    });
+
+    // Sort in memory by spaceName and listName
+    timeEntries.sort((a, b) => {
+      const spaceCompare = (a.spaceName || '').localeCompare(b.spaceName || '');
+      if (spaceCompare !== 0) return spaceCompare;
+      const listCompare = (a.listName || '').localeCompare(b.listName || '');
+      if (listCompare !== 0) return listCompare;
+      return a.startDate.getTime() - b.startDate.getTime();
     });
 
     // Group by space and list (project)

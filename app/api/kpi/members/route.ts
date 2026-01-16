@@ -72,16 +72,16 @@ export async function GET(request: NextRequest) {
     // Calculate summary statistics
     const summary = {
       totalMembers: memberKPIs.length,
-      lowRisk: memberKPIs.filter(m => m.riskLevel === 'LOW').length,
-      mediumRisk: memberKPIs.filter(m => m.riskLevel === 'MEDIUM').length,
-      highRisk: memberKPIs.filter(m => m.riskLevel === 'HIGH').length,
-      criticalRisk: memberKPIs.filter(m => m.riskLevel === 'CRITICAL').length,
-      attendanceCompliant: memberKPIs.filter(m => m.attendanceCompliance).length,
-      timesheetCompliant: memberKPIs.filter(m => m.timesheetCompliance).length,
-      presentNotLogged: memberKPIs.filter(m => m.presentNotLogged).length,
-      overCapacity: memberKPIs.filter(m => m.utilizationStatus === 'OVER').length,
-      underCapacity: memberKPIs.filter(m => m.utilizationStatus === 'UNDER').length,
-      healthyCapacity: memberKPIs.filter(m => m.utilizationStatus === 'HEALTHY').length,
+      lowRisk: memberKPIs.filter((m) => m.riskLevel === 'LOW').length,
+      mediumRisk: memberKPIs.filter((m) => m.riskLevel === 'MEDIUM').length,
+      highRisk: memberKPIs.filter((m) => m.riskLevel === 'HIGH').length,
+      criticalRisk: memberKPIs.filter((m) => m.riskLevel === 'CRITICAL').length,
+      attendanceCompliant: memberKPIs.filter((m) => m.attendanceCompliance).length,
+      timesheetCompliant: memberKPIs.filter((m) => m.timesheetCompliance).length,
+      presentNotLogged: memberKPIs.filter((m) => m.presentNotLogged).length,
+      overCapacity: memberKPIs.filter((m) => m.utilizationStatus === 'OVER').length,
+      underCapacity: memberKPIs.filter((m) => m.utilizationStatus === 'UNDER').length,
+      healthyCapacity: memberKPIs.filter((m) => m.utilizationStatus === 'HEALTHY').length,
     };
 
     return NextResponse.json({

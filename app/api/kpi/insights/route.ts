@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Parse JSON fields
-    const parsedInsights = insights.map(insight => ({
+    const parsedInsights = insights.map((insight) => ({
       ...insight,
       metrics: insight.metrics ? JSON.parse(insight.metrics) : null,
       suggestedActions: insight.suggestedActions ? JSON.parse(insight.suggestedActions) : null,
@@ -71,15 +71,15 @@ export async function GET(request: NextRequest) {
     // Calculate summary
     const summary = {
       total: insights.length,
-      critical: insights.filter(i => i.severity === 'CRITICAL').length,
-      warning: insights.filter(i => i.severity === 'WARNING').length,
-      info: insights.filter(i => i.severity === 'INFO').length,
-      accountability: insights.filter(i => i.category === 'ACCOUNTABILITY').length,
-      capacity: insights.filter(i => i.category === 'CAPACITY').length,
-      risk: insights.filter(i => i.category === 'RISK').length,
-      general: insights.filter(i => i.category === 'GENERAL').length,
-      acknowledged: insights.filter(i => i.acknowledged).length,
-      unacknowledged: insights.filter(i => !i.acknowledged).length,
+      critical: insights.filter((i) => i.severity === 'CRITICAL').length,
+      warning: insights.filter((i) => i.severity === 'WARNING').length,
+      info: insights.filter((i) => i.severity === 'INFO').length,
+      accountability: insights.filter((i) => i.category === 'ACCOUNTABILITY').length,
+      capacity: insights.filter((i) => i.category === 'CAPACITY').length,
+      risk: insights.filter((i) => i.category === 'RISK').length,
+      general: insights.filter((i) => i.category === 'GENERAL').length,
+      acknowledged: insights.filter((i) => i.acknowledged).length,
+      unacknowledged: insights.filter((i) => !i.acknowledged).length,
     };
 
     return NextResponse.json({

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     });
     
     // Group by employee
-    const groupedByEmployee = records.reduce((acc, record) => {
+    const groupedByEmployee = records.reduce((acc: Record<string, typeof records>, record) => {
       if (!acc[record.employeeName]) {
         acc[record.employeeName] = [];
       }
@@ -48,12 +48,12 @@ export async function GET(request: NextRequest) {
     const summary = {
       totalRecords: records.length,
       totalEmployees: Object.keys(groupedByEmployee).length,
-      presentCount: records.filter(r => r.status === 'PRESENT').length,
-      absentCount: records.filter(r => r.status === 'ABSENT').length,
-      partialCount: records.filter(r => r.status === 'PARTIAL').length,
-      totalHours: records.reduce((sum, r) => sum + r.totalHours, 0),
+      presentCount: records.filter((r) => r.status === 'PRESENT').length,
+      absentCount: records.filter((r) => r.status === 'ABSENT').length,
+      partialCount: records.filter((r) => r.status === 'PARTIAL').length,
+      totalHours: records.reduce((sum: number, r) => sum + r.totalHours, 0),
       averageHoursPerDay: records.length > 0 
-        ? records.reduce((sum, r) => sum + r.totalHours, 0) / records.filter(r => r.status === 'PRESENT').length
+        ? records.reduce((sum: number, r) => sum + r.totalHours, 0) / records.filter((r) => r.status === 'PRESENT').length
         : 0
     };
     

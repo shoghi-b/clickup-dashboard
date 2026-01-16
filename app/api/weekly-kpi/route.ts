@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         ...(memberIds.length > 0
           ? {
               employeeName: {
-                in: teamMembers.map((m) => m.username),
+                in: teamMembers.map((m: { username: string }) => m.username),
               },
             }
           : {}),
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     const memberData = teamMembers.map((member) => {
       const memberDailySummaries = dailySummaries.filter((ds) => ds.teamMemberId === member.id);
-      const memberAttendance = attendanceRecords.filter((ar) =>
+      const memberAttendance = attendanceRecords.filter((ar: { employeeName: string }) =>
         ar.employeeName.toLowerCase().includes(member.username.toLowerCase())
       );
 
