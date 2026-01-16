@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { RefreshCw, Users, Calendar, TrendingUp, Filter, ChevronDown, Clock, BarChart3, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, Activity } from 'lucide-react';
+import { RefreshCw, Users, Calendar, TrendingUp, Filter, ChevronDown, Clock, BarChart3, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertCircle, Activity, LogOut } from 'lucide-react';
 import { TeamOverview } from '@/components/dashboard/team-overview';
 import { TimesheetGridView } from '@/components/dashboard/timesheet-grid-view';
 import { MonthGridView } from '@/components/dashboard/month-grid-view';
@@ -34,6 +34,7 @@ import { KPIDrillDownSheet } from '@/components/dashboard/kpi-drill-down-sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, startOfYear, endOfYear, startOfQuarter, endOfQuarter, subMonths, subQuarters, subYears } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 interface DashboardStats {
   totalTeamMembers: number;
@@ -50,6 +51,7 @@ interface TeamMember {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
@@ -84,6 +86,7 @@ export default function DashboardPage() {
   const [drillDownOpen, setDrillDownOpen] = useState(false);
   const [drillDownMetric, setDrillDownMetric] = useState<string>('');
   const [drillDownMembers, setDrillDownMembers] = useState<any[]>([]);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // Initialize date ranges after mount to prevent hydration mismatch
   useEffect(() => {
@@ -457,6 +460,23 @@ export default function DashboardPage() {
     }
   };
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+      if (response.ok) {
+        router.push('/login');
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
       <div className="container mx-auto p-6 space-y-8 max-w-full">
@@ -477,6 +497,17 @@ export default function DashboardPage() {
                 <span>Last sync: {format(lastSync, 'MMM dd, yyyy HH:mm:ss')}</span>
               </div>
             )}
+
+            {/* Logout Button */}
+            <Button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              variant="outline"
+              className="border-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white transition-all duration-300"
+            >
+              <LogOut className={`w-4 h-4 mr-2 ${loggingOut ? 'animate-spin' : ''}`} />
+              {loggingOut ? 'Logging out...' : 'Logout'}
+            </Button>
 
             {/* Reset Database Button */}
             <ResetDataButton />
