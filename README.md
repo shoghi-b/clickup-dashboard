@@ -84,6 +84,23 @@ Open [http://localhost:3000](http://localhost:3000) and click **"Sync Data"** to
 
 📖 **For detailed setup instructions, see [SETUP.md](SETUP.md)**
 
+## 🚀 Deployment
+
+Ready to deploy to production? This application is optimized for deployment on Vercel.
+
+📖 **See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment instructions**
+
+### Quick Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone)
+
+The deployment guide covers:
+- Step-by-step Vercel setup
+- Environment variable configuration
+- Database migration handling
+- Troubleshooting common issues
+- Performance optimization tips
+
 ## 📖 Usage Guide
 
 ### Week View
