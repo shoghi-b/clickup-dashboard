@@ -113,11 +113,13 @@ Once deployed, Vercel will provide you with a URL (e.g., `your-app.vercel.app`).
 
 ### Build Fails with Prisma Error
 
-**Problem**: Build fails with "Prisma client not generated"
+**Problem**: Build fails with "Prisma schema validation - datasource property `url` is no longer supported"
 
 **Solution**: 
-- Ensure `postinstall` script is in `package.json`
-- Check that `DATABASE_URL` and `DIRECT_URL` are set in environment variables
+- This is already fixed in the latest version
+- Prisma v7 requires database URLs to be in `prisma.config.ts` only, not in `schema.prisma`
+- If you still see this, ensure you've pulled the latest changes
+- The `datasource` block in `schema.prisma` should only have `provider = "postgresql"`
 
 ### Database Connection Timeout
 
