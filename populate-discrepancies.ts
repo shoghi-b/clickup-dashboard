@@ -74,7 +74,9 @@ async function populateDiscrepancies() {
                                 await discrepancyService.saveDiscrepancy(disc);
 
                                 // Track counts
-                                discrepanciesByRule[disc.rule] = (discrepanciesByRule[disc.rule] || 0) + 1;
+                                if (disc.rule) {
+                                    discrepanciesByRule[disc.rule] = (discrepanciesByRule[disc.rule] || 0) + 1;
+                                }
                                 discrepanciesByMember[member.username] = (discrepanciesByMember[member.username] || 0) + 1;
 
                                 memberWeekDiscrepancies++;

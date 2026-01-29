@@ -1,45 +1,92 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { prisma } from '@/lib/prisma';
+// import { compare } from 'bcryptjs'; // TODO: Install bcryptjs for secure hashing
 
-const USER_EMAIL = 'shoghi@tcules.com';
-const USER_PASSWORD = 'Shoghi07';
-const SESSION_DURATION = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+const ADMIN_EMAIL = 'admin@tcules.com';
+const ADMIN_PASSWORD = 'Admin@123#'; // In production, this should be in .env
+const SESSION_DURATION = 2 * 60 * 60 * 1000; // 2 hours
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email, password } = body;
 
-    // Validate credentials
-    if (email !== USER_EMAIL || password !== USER_PASSWORD) {
+    if (!email || !password) {
       return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
-        { status: 401 }
+        { success: false, error: 'Email and password are required' },
+        { status: 400 }
       );
     }
 
-    // Create session token
+    let role = 'guest';
+    let redirectUrl = '/login';
+    let userId = null;
+    let userEmail = email;
+
+    // 1. Check if Admin
+    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      role = 'manager';
+      redirectUrl = '/manager';
+    }
+    // 2. Check if Team Member
+    else {
+      const member = await prisma.teamMember.findFirst({
+        where: { email },
+      });
+
+      if (member) {
+        if (!member.password) {
+          return NextResponse.json(
+            { success: false, error: 'Account not activated. Please contact your admin to set your password.' },
+            { status: 401 }
+          );
+        }
+
+        // TODO: Use secure comparison (bcrypt.compare)
+        if (member.password === password) {
+          role = 'member';
+          redirectUrl = '/member';
+          userId = member.id;
+        } else {
+          return NextResponse.json(
+            { success: false, error: 'Invalid password' },
+            { status: 401 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { success: false, error: 'User not found' },
+          { status: 401 }
+        );
+      }
+    }
+
+    // Create session
     const sessionToken = Buffer.from(
       JSON.stringify({
-        email,
+        email: userEmail,
+        id: userId,
+        role,
         expiresAt: Date.now() + SESSION_DURATION,
       })
     ).toString('base64');
 
-    // Set cookie with 2-hour expiration
     const cookieStore = await cookies();
     cookieStore.set('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: SESSION_DURATION / 1000, // Convert to seconds
+      maxAge: SESSION_DURATION / 1000,
       path: '/',
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Login successful',
+      role,
+      redirectUrl,
     });
+
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(

@@ -9,9 +9,15 @@ export async function GET() {
       },
     });
 
+    const data = teamMembers.map(member => ({
+      ...member,
+      password: null, // Don't send password hash
+      hasPassword: !!member.password
+    }));
+
     return NextResponse.json({
       success: true,
-      data: teamMembers,
+      data,
     });
   } catch (error) {
     return NextResponse.json(

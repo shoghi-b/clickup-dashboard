@@ -3,12 +3,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, AlertCircle, Info } from 'lucide-react';
 import type { RiskSignalSummary } from '@/lib/services/risk-signals-service';
-import type { DiscrepancySummary } from '@/lib/types/discrepancy';
+import type { DiscrepancySummary, DiscrepancyRule } from '@/lib/types/discrepancy';
 
 interface RiskSignalsCardProps {
   signals: RiskSignalSummary[];
   discrepancies?: DiscrepancySummary[];
-  onDiscrepancyClick?: (rule: string) => void;
+  onDiscrepancyClick?: (rule: DiscrepancyRule) => void;
   insights?: {
     title: string;
     description: string;

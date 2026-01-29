@@ -25,8 +25,18 @@ export default function LoginPage() {
   const checkAuth = async () => {
     try {
       const response = await fetch('/api/auth/me');
-      if (response.ok) {
-        router.push('/');
+      const data = await response.json();
+      if (response.ok && data.authenticated) {
+        if (data.user?.role === 'manager') {
+          router.push('/manager');
+
+        } else if (data.user?.role === 'member') {
+          router.push('/member');
+        } else {
+          // Instead of redirecting to root (which redirects to login), show error or stay on page
+          console.error('Unknown role:', data.user?.role);
+          setError('Account has no assigned role. Contact support.');
+        }
       }
     } catch (error) {
       // Not authenticated, stay on login page
@@ -50,7 +60,7 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        router.push('/');
+        router.push(data.redirectUrl || '/member');
         router.refresh();
       } else {
         setError(data.error || 'Invalid email or password');
@@ -73,7 +83,7 @@ export default function LoginPage() {
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gray-200 rounded-full opacity-20 blur-3xl animate-pulse"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gray-200 rounded-full opacity-20 blur-3xl animate-pulse delay-1000"></div>
       </div>
-      
+
       <div className="w-full max-w-md relative z-10 animate-in fade-in duration-500 slide-in-from-bottom-4">
         <Card className="border-2 border-gray-200 shadow-2xl backdrop-blur-sm bg-white/95 hover:shadow-3xl transition-shadow duration-500">
           <CardHeader className="space-y-3 text-center pb-6">

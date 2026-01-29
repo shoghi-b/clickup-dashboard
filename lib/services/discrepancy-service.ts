@@ -286,6 +286,10 @@ export async function saveDiscrepancy(discrepancy: Partial<Discrepancy>) {
 
     const date = new Date(discrepancy.date);
 
+    const metadataToSave = typeof discrepancy.metadata === 'object'
+        ? JSON.stringify(discrepancy.metadata)
+        : discrepancy.metadata;
+
     return await prisma.discrepancy.upsert({
         where: {
             teamMemberId_date_rule: {
@@ -297,7 +301,7 @@ export async function saveDiscrepancy(discrepancy: Partial<Discrepancy>) {
         update: {
             severity: discrepancy.severity!,
             minutesInvolved: discrepancy.minutesInvolved!,
-            metadata: discrepancy.metadata,
+            metadata: metadataToSave,
             updatedAt: new Date()
         },
         create: {
@@ -307,7 +311,7 @@ export async function saveDiscrepancy(discrepancy: Partial<Discrepancy>) {
             severity: discrepancy.severity!,
             minutesInvolved: discrepancy.minutesInvolved!,
             status: 'open',
-            metadata: discrepancy.metadata
+            metadata: metadataToSave
         }
     });
 }
@@ -415,11 +419,12 @@ export function generateDiscrepancySummary(
 
     const summaries: DiscrepancySummary[] = [];
 
-    for (const [rule, items] of Object.entries(groupedByRule)) {
+    for (const [rule, untypedItems] of Object.entries(groupedByRule)) {
+        const items = untypedItems as any[];
         const uniqueMembers = new Set(items.map(d => d.teamMemberId));
         const maxSeverity = items.reduce((max, d) => {
-            const severityOrder = { low: 1, medium: 2, high: 3 };
-            return severityOrder[d.severity as DiscrepancySeverity] > severityOrder[max] ? d.severity : max;
+            const severityOrder: Record<DiscrepancySeverity, number> = { low: 1, medium: 2, high: 3 };
+            return severityOrder[d.severity as DiscrepancySeverity] > severityOrder[max as DiscrepancySeverity] ? d.severity : max;
         }, 'low' as DiscrepancySeverity);
 
         summaries.push({

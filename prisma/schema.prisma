@@ -18,6 +18,7 @@ model TeamMember {
   email           String?
   profilePicture  String?
   role            String?
+  password        String?       // Hashed password for individual access
 
   // Work expectations
   expectedHoursPerDay   Float   @default(8.0)

@@ -19,6 +19,11 @@ export interface Discrepancy {
     userId: string;
     userName?: string;
     date: string;
+    teamMember?: {
+        username: string;
+        email: string | null;
+        profilePicture: string | null;
+    };
     rule: DiscrepancyRule;
     severity: DiscrepancySeverity;
     minutesInvolved: number;
@@ -29,13 +34,13 @@ export interface Discrepancy {
         resolvedAt: string;
         resolvedBy?: string;
     };
-    metadata?: {
+    metadata?: string | {
         logTime?: string;
         loggedMinutes?: number;
         attendanceTimeIn?: string;
         attendanceTimeOut?: string;
         inOutPeriods?: InOutPeriod[];
-        outPeriodDuring?: InOutPeriod;
+        outPeriodDuring?: { start: string; end: string };
         [key: string]: any;
     };
     createdAt: string;

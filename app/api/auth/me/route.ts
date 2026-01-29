@@ -32,6 +32,7 @@ export async function GET() {
         authenticated: true,
         user: {
           email: sessionData.email,
+          role: sessionData.role,
         },
       });
     } catch (parseError) {

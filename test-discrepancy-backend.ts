@@ -93,7 +93,7 @@ async function testWithNewData() {
         console.log('='.repeat(60));
         discrepancies.forEach((d, idx) => {
             console.log(`\n${idx + 1}. ${d.rule}`);
-            console.log(`   Severity: ${d.severity.toUpperCase()}`);
+            console.log(`   Severity: ${d.severity?.toUpperCase() || 'UNKNOWN'}`);
             console.log(`   Minutes involved: ${d.minutesInvolved}`);
             console.log(`   Status: ${d.status}`);
             if (d.metadata) {
