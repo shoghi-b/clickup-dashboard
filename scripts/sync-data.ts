@@ -1,9 +1,9 @@
-import { config } from 'dotenv';
+import 'dotenv/config';
 import { SyncService } from '../lib/services/sync-service';
 import { subDays } from 'date-fns';
 
 // Load environment variables
-config();
+// Environment variables loaded via import 'dotenv/config'
 
 async function syncData() {
   console.log('Starting ClickUp data sync...\n');
@@ -13,7 +13,7 @@ async function syncData() {
   // Step 1: Sync team members
   console.log('=== Step 1: Syncing team members ===');
   const teamMembersResult = await syncService.syncTeamMembers();
-  
+
   if (teamMembersResult.success) {
     console.log(`✓ Successfully synced ${teamMembersResult.count} team members\n`);
   } else {
@@ -25,11 +25,11 @@ async function syncData() {
   console.log('=== Step 2: Syncing time entries (last 30 days) ===');
   const endDate = new Date();
   const startDate = subDays(endDate, 30);
-  
+
   console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
-  
+
   const timeEntriesResult = await syncService.syncTimeEntries(startDate, endDate);
-  
+
   if (timeEntriesResult.success) {
     console.log(`✓ Successfully synced ${timeEntriesResult.count} time entries\n`);
   } else {

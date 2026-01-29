@@ -23,8 +23,8 @@ function endOfDayUTC(date: Date): Date {
 
 function isSameDayUTC(date1: Date, date2: Date): boolean {
   return date1.getUTCFullYear() === date2.getUTCFullYear() &&
-         date1.getUTCMonth() === date2.getUTCMonth() &&
-         date1.getUTCDate() === date2.getUTCDate();
+    date1.getUTCMonth() === date2.getUTCMonth() &&
+    date1.getUTCDate() === date2.getUTCDate();
 }
 
 // Get Monday of the week in UTC
@@ -160,7 +160,7 @@ export class AnalyticsService {
     // Determine compliance
     const meetsMinimum = totalHours >= MINIMUM_DAILY_HOURS;
     const isSameDayLogging = sameDayEntries > 0 && backfilledEntries === 0;
-    
+
     let complianceStatus: ComplianceStatus;
     if (meetsMinimum && isSameDayLogging) {
       complianceStatus = 'FULLY_COMPLIANT';
@@ -204,6 +204,20 @@ export class AnalyticsService {
         utilizationPercent,
       },
     });
+
+    // Auto-detect discrepancies
+    try {
+      const { discrepancyService } = await import('./discrepancy-service');
+      const discrepancies = await discrepancyService.computeDiscrepancies(teamMemberId, dayStart);
+
+      if (discrepancies.length > 0) {
+        for (const discrepancy of discrepancies) {
+          await discrepancyService.saveDiscrepancy(discrepancy);
+        }
+      }
+    } catch (error) {
+      console.error(`Error detecting discrepancies for member ${teamMemberId} on ${date}:`, error);
+    }
   }
 
   async calculateWeeklySummary(

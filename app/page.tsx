@@ -31,7 +31,10 @@ import { ResetDataButton } from '@/components/dashboard/reset-data-button';
 import { WeeklyKPICards } from '@/components/dashboard/weekly-kpi-cards';
 import { RiskSignalsCard } from '@/components/dashboard/risk-signals-card';
 import { KPIDrillDownSheet } from '@/components/dashboard/kpi-drill-down-sheet';
+import { ResolveDiscrepancySheet } from '@/components/dashboard/resolve-discrepancy-sheet';
+import { DiscrepancyDetailsSheet } from '@/components/dashboard/discrepancy-details-sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import type { Discrepancy, DiscrepancySummary } from '@/lib/types/discrepancy';
 
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, startOfYear, endOfYear, startOfQuarter, endOfQuarter, subMonths, subQuarters, subYears } from 'date-fns';
 import { useRouter } from 'next/navigation';
@@ -88,6 +91,16 @@ export default function DashboardPage() {
   const [drillDownMembers, setDrillDownMembers] = useState<any[]>([]);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // Discrepancy state
+  const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
+  const [discrepancySummary, setDiscrepancySummary] = useState<DiscrepancySummary[]>([]);
+  const [loadingDiscrepancies, setLoadingDiscrepancies] = useState(false);
+  const [resolveSheetOpen, setResolveSheetOpen] = useState(false);
+  const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
+  const [selectedDiscrepancy, setSelectedDiscrepancy] = useState<Discrepancy | null>(null);
+  const [initialResolveNote, setInitialResolveNote] = useState('');
+  const [selectedRule, setSelectedRule] = useState<DiscrepancyRule | null>(null);
+
   // Initialize date ranges after mount to prevent hydration mismatch
   useEffect(() => {
     if (dateRange === null) {
@@ -133,6 +146,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (selectedMembers.length > 0 && dateRange) {
       fetchWeeklyKPI();
+      fetchDiscrepancies(); // Also fetch discrepancies
     }
   }, [dateRange, selectedMembers]);
 
@@ -171,6 +185,56 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Failed to fetch team members:', error);
     }
+  };
+
+  const fetchDiscrepancies = async () => {
+    if (!dateRange?.from) return;
+
+    setLoadingDiscrepancies(true);
+    try {
+      const weekStart = format(dateRange.from, 'yyyy-MM-dd');
+      const response = await fetch(`/api/discrepancies?weekStart=${weekStart}&status=open`);
+      const result = await response.json();
+
+      if (result.success) {
+        setDiscrepancies(result.data.discrepancies || []);
+        setDiscrepancySummary(result.data.summary || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch discrepancies:', error);
+    } finally {
+      setLoadingDiscrepancies(false);
+    }
+  };
+
+  // Handle manual sync
+  const handleSyncData = async () => {
+    // ... logic for sync
+  };
+
+  const handleDiscrepancyClick = (rule: DiscrepancyRule) => {
+    setSelectedRule(rule);
+    setDetailsSheetOpen(true);
+  };
+
+  const handleResolveFromDetails = (discrepancy: Discrepancy, note?: string) => {
+    setSelectedDiscrepancy(discrepancy);
+    if (note) setInitialResolveNote(note);
+    else setInitialResolveNote('');
+
+    setDetailsSheetOpen(false); // Close details sheet
+    setResolveSheetOpen(true); // Open resolve sheet
+  };
+
+  const handleDiscrepancyResolved = () => {
+    setResolveSheetOpen(false);
+    setInitialResolveNote(''); // Clear note
+    // Refresh both discrepancies and weekly KPI data
+    fetchDiscrepancies();
+    fetchWeeklyKPI();
+
+    // Close details sheet too if we want full close
+    // setDetailsSheetOpen(false);
   };
 
   const handleQuickAction = (action: string) => {
@@ -583,11 +647,10 @@ export default function DashboardPage() {
 
                   {/* Upload Result */}
                   {uploadResult && (
-                    <div className={`rounded-lg p-4 border ${
-                      uploadResult.success
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-red-50 border-red-200'
-                    }`}>
+                    <div className={`rounded-lg p-4 border ${uploadResult.success
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-red-50 border-red-200'
+                      }`}>
                       <div className="flex items-start gap-3">
                         {uploadResult.success ? (
                           <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -595,9 +658,8 @@ export default function DashboardPage() {
                           <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                         )}
                         <div className="flex-1">
-                          <p className={`text-sm font-medium ${
-                            uploadResult.success ? 'text-green-900' : 'text-red-900'
-                          }`}>
+                          <p className={`text-sm font-medium ${uploadResult.success ? 'text-green-900' : 'text-red-900'
+                            }`}>
                             {uploadResult.message}
                           </p>
                           {uploadResult.success && uploadResult.summary && (
@@ -925,7 +987,12 @@ export default function DashboardPage() {
                 <WeeklyKPICards kpiData={weeklyKPIData.kpi} onCardClick={handleCardClick} />
               </div>
               <div>
-                <RiskSignalsCard signals={weeklyKPIData.riskSignals} insights={weeklyKPIData.insights} />
+                <RiskSignalsCard
+                  signals={weeklyKPIData.riskSignals}
+                  discrepancies={discrepancySummary}
+                  onDiscrepancyClick={handleDiscrepancyClick}
+                  insights={weeklyKPIData.insights}
+                />
               </div>
             </div>
           </div>
@@ -981,31 +1048,51 @@ export default function DashboardPage() {
               drillDownMetric === 'attendanceCompliance'
                 ? 'Attendance Compliance Issues'
                 : drillDownMetric === 'timesheetCompliance'
-                ? 'Timesheet Compliance Issues'
-                : drillDownMetric === 'presentNotLogged'
-                ? 'Present But Not Logged'
-                : drillDownMetric === 'avgUtilization'
-                ? 'Team Utilization'
-                : drillDownMetric === 'overCapacity'
-                ? 'Over Capacity Members'
-                : 'Under Capacity Members'
+                  ? 'Timesheet Compliance Issues'
+                  : drillDownMetric === 'presentNotLogged'
+                    ? 'Present But Not Logged'
+                    : drillDownMetric === 'avgUtilization'
+                      ? 'Team Utilization'
+                      : drillDownMetric === 'overCapacity'
+                        ? 'Over Capacity Members'
+                        : 'Under Capacity Members'
             }
             description={
               drillDownMetric === 'attendanceCompliance'
                 ? 'Members with less than 4 days of attendance this week'
                 : drillDownMetric === 'timesheetCompliance'
-                ? 'Members with less than 4 days of proper logging this week'
-                : drillDownMetric === 'presentNotLogged'
-                ? 'Members who were present but did not log time'
-                : drillDownMetric === 'avgUtilization'
-                ? 'All team members with their utilization rates'
-                : drillDownMetric === 'overCapacity'
-                ? 'Members logging more than 85% utilization (burnout risk)'
-                : 'Members logging less than 60% utilization'
+                  ? 'Members with less than 4 days of proper logging this week'
+                  : drillDownMetric === 'presentNotLogged'
+                    ? 'Members who were present but did not log time'
+                    : drillDownMetric === 'avgUtilization'
+                      ? 'All team members with their utilization rates'
+                      : drillDownMetric === 'overCapacity'
+                        ? 'Members logging more than 85% utilization (burnout risk)'
+                        : 'Members logging less than 60% utilization'
             }
             members={drillDownMembers}
           />
         )}
+
+        {/* Resolve Discrepancy Sheet */}
+        {selectedDiscrepancy && (
+          <ResolveDiscrepancySheet
+            open={resolveSheetOpen}
+            onOpenChange={setResolveSheetOpen}
+            discrepancy={selectedDiscrepancy}
+            initialNote={initialResolveNote}
+            onResolved={handleDiscrepancyResolved}
+          />
+        )}
+
+        {/* Discrepancy Details Sheet */}
+        <DiscrepancyDetailsSheet
+          open={detailsSheetOpen}
+          onOpenChange={setDetailsSheetOpen}
+          rule={selectedRule}
+          discrepancies={discrepancies.filter(d => d.rule === selectedRule && d.status === 'open')}
+          onResolve={handleResolveFromDetails}
+        />
       </div>
     </div>
   );

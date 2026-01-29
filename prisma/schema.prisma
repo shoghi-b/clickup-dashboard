@@ -2,11 +2,12 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider  = "postgresql"
 }
 
 // ClickUp Team Member
@@ -27,6 +28,7 @@ model TeamMember {
   dailySummaries  DailySummary[]
   weeklySummaries WeeklySummary[]
   kpiSummaries    MemberKPISummary[]
+  discrepancies   Discrepancy[]
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -190,7 +192,10 @@ model AttendanceRecord {
   // Date
   date            DateTime      // The work day
 
-  // Time tracking
+  // Time tracking - All IN/OUT periods as JSON array
+  inOutPeriods    String?       // JSON: [{"in":"10:26","out":"11:23"},{"in":"14:59","out":"15:17"}]
+
+  // Time tracking - Legacy fields (kept for backward compatibility)
   firstIn         String?       // First IN time (HH:mm format)
   lastOut         String?       // Last OUT time (HH:mm format)
 
@@ -371,4 +376,41 @@ model Insight {
   @@index([category])
   @@index([severity])
   @@index([acknowledged])
+}
+
+// Discrepancy - Attendance vs ClickUp logging issues
+model Discrepancy {
+  id              String        @id @default(cuid())
+  
+  // Scope
+  teamMemberId    String
+  teamMember      TeamMember    @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  date            DateTime      // The work day with the issue
+  
+  // Rule details
+  rule            String        // "LOG_AFTER_EXIT", "NO_ATTENDANCE", "OUTSIDE_HOURS", "ZERO_PRESENCE"
+  severity        String        // "low", "medium", "high"
+  minutesInvolved Int           // How many minutes are flagged
+  
+  // Status
+  status          String        @default("open")  // "open", "resolved"
+  
+  // Resolution (optional)
+  resolvedReason  String?       // Why it was resolved
+  resolvedNote    String?       // Additional context
+  resolvedAt      DateTime?     // When it was resolved
+  resolvedBy      String?       // User who resolved (if auth added later)
+  
+  // Metadata
+  metadata        String?       // JSON with rule-specific details
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([teamMemberId, date, rule])
+  @@index([teamMemberId])
+  @@index([date])
+  @@index([rule])
+  @@index([status])
+  @@index([severity])
 }

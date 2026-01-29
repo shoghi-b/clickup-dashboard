@@ -3,18 +3,21 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, AlertCircle, Info } from 'lucide-react';
 import type { RiskSignalSummary } from '@/lib/services/risk-signals-service';
+import type { DiscrepancySummary } from '@/lib/types/discrepancy';
 
 interface RiskSignalsCardProps {
   signals: RiskSignalSummary[];
+  discrepancies?: DiscrepancySummary[];
+  onDiscrepancyClick?: (rule: string) => void;
   insights?: {
     title: string;
     description: string;
   };
 }
 
-export function RiskSignalsCard({ signals, insights }: RiskSignalsCardProps) {
+export function RiskSignalsCard({ signals, discrepancies, onDiscrepancyClick, insights }: RiskSignalsCardProps) {
   const getSeverityIcon = (severity: string) => {
-    switch (severity) {
+    switch (severity.toUpperCase()) {
       case 'HIGH':
         return <AlertCircle className="h-5 w-5 text-red-600" />;
       case 'MEDIUM':
@@ -87,6 +90,36 @@ export function RiskSignalsCard({ signals, insights }: RiskSignalsCardProps) {
                 </div>
               </div>
             ))}
+
+            {/* Discrepancy Alerts Section */}
+            {discrepancies && discrepancies.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                  Attendance Discrepancies
+                </h4>
+                <div className="space-y-2">
+                  {discrepancies.map((discrepancy) => (
+                    <button
+                      key={discrepancy.rule}
+                      onClick={() => onDiscrepancyClick?.(discrepancy.rule)}
+                      className={`w-full text-left flex items-start gap-3 p-3 rounded-lg border transition-colors hover:bg-gray-50 ${getSeverityColor(
+                        discrepancy.severity.toUpperCase()
+                      )}`}
+                    >
+                      {getSeverityIcon(discrepancy.severity.toUpperCase())}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          🔴 {discrepancy.count} {discrepancy.description}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {discrepancy.affectedMemberIds.length} team member(s) affected
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Insights Section */}
             {insights && (
