@@ -11,13 +11,14 @@ interface KPICardProps {
   trendValue?: string;
   status: 'good' | 'warning' | 'critical';
   onClick?: () => void;
+  context?: string;
 }
 
-function KPICard({ title, value, subtitle, trend, trendValue, status, onClick }: KPICardProps) {
+function KPICard({ title, value, subtitle, trend, trendValue, status, onClick, context }: KPICardProps) {
   const statusColors = {
-    good: 'border-green-200 hover:border-green-400',
-    warning: 'border-yellow-200 hover:border-yellow-400',
-    critical: 'border-red-200 hover:border-red-400',
+    good: 'border-green-200 hover:border-green-400 bg-green-50/30',
+    warning: 'border-yellow-200 hover:border-yellow-400 bg-yellow-50/30',
+    critical: 'border-red-200 hover:border-red-400 bg-red-50/30',
   };
 
   const valueColors = {
@@ -34,9 +35,8 @@ function KPICard({ title, value, subtitle, trend, trendValue, status, onClick }:
 
   return (
     <Card
-      className={`cursor-pointer transition-all duration-200 ${statusColors[status]} ${
-        onClick ? 'hover:shadow-lg' : ''
-      }`}
+      className={`cursor-pointer transition-all duration-200 ${statusColors[status]} ${onClick ? 'hover:shadow-lg' : ''
+        }`}
       onClick={onClick}
     >
       <CardHeader className="pb-2">
@@ -53,6 +53,9 @@ function KPICard({ title, value, subtitle, trend, trendValue, status, onClick }:
           )}
         </div>
         <p className="text-xs text-gray-500 mt-2">{subtitle}</p>
+        {context && (
+          <p className="text-xs text-gray-400 mt-1 italic">{context}</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -90,105 +93,98 @@ export function WeeklyKPICards({ kpiData, onCardClick }: WeeklyKPICardsProps) {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Section: Accountability */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Accountability</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <KPICard
-            title="Attendance Compliance"
-            value={`${kpiData.attendanceCompliance}%`}
-            subtitle={
-              kpiData.attendanceCompliance >= 80
-                ? '✓ Team is showing up'
-                : '⚠ Attendance problem'
-            }
-            status={getComplianceStatus(kpiData.attendanceCompliance)}
-            trend={kpiData.attendanceCompliance >= 80 ? 'up' : 'down'}
-            trendValue="vs last week"
-            onClick={() => onCardClick('attendanceCompliance')}
-          />
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <KPICard
+        title="Attendance Compliance"
+        value={`${kpiData.attendanceCompliance}%`}
+        subtitle={
+          kpiData.attendanceCompliance >= 80
+            ? '✓ Team is showing up'
+            : '⚠ Attendance problem'
+        }
+        context="% of team members present ≥4 days/week"
+        status={getComplianceStatus(kpiData.attendanceCompliance)}
+        trend={kpiData.attendanceCompliance >= 80 ? 'up' : 'down'}
+        trendValue="vs last week"
+        onClick={() => onCardClick('attendanceCompliance')}
+      />
 
-          <KPICard
-            title="Timesheet Compliance"
-            value={`${kpiData.timesheetCompliance}%`}
-            subtitle={
-              kpiData.timesheetCompliance >= 80
-                ? '✓ Good logging discipline'
-                : '⚠ Data cannot be trusted'
-            }
-            status={getComplianceStatus(kpiData.timesheetCompliance)}
-            trend={kpiData.timesheetCompliance >= 80 ? 'up' : 'down'}
-            trendValue="vs last week"
-            onClick={() => onCardClick('timesheetCompliance')}
-          />
+      <KPICard
+        title="Timesheet Compliance"
+        value={`${kpiData.timesheetCompliance}%`}
+        subtitle={
+          kpiData.timesheetCompliance >= 80
+            ? '✓ Good logging discipline'
+            : '⚠ Data cannot be trusted'
+        }
+        context="% of team logging ≥4 days/week"
+        status={getComplianceStatus(kpiData.timesheetCompliance)}
+        trend={kpiData.timesheetCompliance >= 80 ? 'up' : 'down'}
+        trendValue="vs last week"
+        onClick={() => onCardClick('timesheetCompliance')}
+      />
 
-          <KPICard
-            title="Present, Not Logged"
-            value={kpiData.presentNotLogged}
-            subtitle={
-              kpiData.presentNotLogged === 0
-                ? '✓ All present members logging'
-                : '🚨 Critical issue'
-            }
-            status={getCountStatus(kpiData.presentNotLogged)}
-            onClick={() => onCardClick('presentNotLogged')}
-          />
-        </div>
-      </div>
+      <KPICard
+        title="Present, Not Logged"
+        value={kpiData.presentNotLogged}
+        subtitle={
+          kpiData.presentNotLogged === 0
+            ? '✓ All present members logging'
+            : '🚨 Critical issue'
+        }
+        context="Members at office but not tracking time"
+        status={getCountStatus(kpiData.presentNotLogged)}
+        onClick={() => onCardClick('presentNotLogged')}
+      />
 
-      {/* Section: Capacity */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Capacity</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <KPICard
-            title="Avg Utilization"
-            value={`${kpiData.avgUtilization}%`}
-            subtitle={
-              kpiData.avgUtilization >= 70 && kpiData.avgUtilization <= 85
-                ? '✓ Healthy utilization'
-                : kpiData.avgUtilization < 60
-                ? '⚠ Underutilized'
-                : '⚠ Risk of burnout'
-            }
-            status={getUtilizationStatus(kpiData.avgUtilization)}
-            trend={
-              kpiData.avgUtilization >= 70 && kpiData.avgUtilization <= 85
-                ? 'neutral'
-                : kpiData.avgUtilization < 70
-                ? 'down'
-                : 'up'
-            }
-            trendValue="vs last week"
-            onClick={() => onCardClick('avgUtilization')}
-          />
+      <KPICard
+        title="Avg Utilization"
+        value={`${kpiData.avgUtilization}%`}
+        subtitle={
+          kpiData.avgUtilization >= 70 && kpiData.avgUtilization <= 85
+            ? '✓ Healthy utilization'
+            : kpiData.avgUtilization < 60
+              ? '⚠ Underutilized'
+              : '⚠ Risk of burnout'
+        }
+        context="Average hours logged vs expected (70-85% ideal)"
+        status={getUtilizationStatus(kpiData.avgUtilization)}
+        trend={
+          kpiData.avgUtilization >= 70 && kpiData.avgUtilization <= 85
+            ? 'neutral'
+            : kpiData.avgUtilization < 70
+              ? 'down'
+              : 'up'
+        }
+        trendValue="vs last week"
+        onClick={() => onCardClick('avgUtilization')}
+      />
 
-          <KPICard
-            title="Over Capacity"
-            value={kpiData.overCapacity}
-            subtitle={
-              kpiData.overCapacity === 0
-                ? '✓ No burnout risk'
-                : '⚠ Hidden burnout risk'
-            }
-            status={getCountStatus(kpiData.overCapacity)}
-            onClick={() => onCardClick('overCapacity')}
-          />
+      <KPICard
+        title="Over Capacity"
+        value={kpiData.overCapacity}
+        subtitle={
+          kpiData.overCapacity === 0
+            ? '✓ No burnout risk'
+            : '⚠ Hidden burnout risk'
+        }
+        context="Members logging >85% utilization"
+        status={getCountStatus(kpiData.overCapacity)}
+        onClick={() => onCardClick('overCapacity')}
+      />
 
-          <KPICard
-            title="Under Capacity"
-            value={kpiData.underCapacity}
-            subtitle={
-              kpiData.underCapacity === 0
-                ? '✓ Good capacity balance'
-                : '⚠ Review allocation'
-            }
-            status={getCountStatus(kpiData.underCapacity)}
-            onClick={() => onCardClick('underCapacity')}
-          />
-        </div>
-      </div>
+      <KPICard
+        title="Under Capacity"
+        value={kpiData.underCapacity}
+        subtitle={
+          kpiData.underCapacity === 0
+            ? '✓ Good capacity balance'
+            : '⚠ Review allocation'
+        }
+        context="Members logging <60% utilization"
+        status={getCountStatus(kpiData.underCapacity)}
+        onClick={() => onCardClick('underCapacity')}
+      />
     </div>
   );
 }
-

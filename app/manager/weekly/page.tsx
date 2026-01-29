@@ -1,21 +1,38 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useDashboard } from '../dashboard-context';
 import { WeeklyKPICards } from '@/components/dashboard/weekly-kpi-cards';
 import { TimesheetGridView } from '@/components/dashboard/timesheet-grid-view';
 import { KPIDrillDownSheet } from '@/components/dashboard/kpi-drill-down-sheet';
 import { DateRangePresetPicker } from '@/components/ui/date-range-preset-picker';
 import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { RefreshCw, Search, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 
 export default function WeeklyLogsPage() {
-    const { weeklyKPIData, dateRange, setDateRange, teamMembers, selectedMembers, refreshData, isLoading } = useDashboard();
+    const { weeklyKPIData, dateRange, setDateRange, teamMembers, selectedMembers, setSelectedMembers, refreshData, isLoading } = useDashboard();
+
+    // Search & Filter State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterOpen, setFilterOpen] = useState(false);
 
     // Drill Down State
     const [drillDownOpen, setDrillDownOpen] = useState(false);
     const [drillDownMetric, setDrillDownMetric] = useState<string>('');
     const [drillDownMembers, setDrillDownMembers] = useState<any[]>([]);
+
+    // Filtered team members based on search
+    const filteredTeamMembers = useMemo(() => {
+        return teamMembers.filter((member) =>
+            member.username.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [teamMembers, searchQuery]);
 
     const handleCardClick = (metric: string) => {
         if (!weeklyKPIData) return;
@@ -59,6 +76,46 @@ export default function WeeklyLogsPage() {
         setDrillDownOpen(true);
     };
 
+    const handleToggleMember = (memberId: string) => {
+        if (selectedMembers.includes(memberId)) {
+            setSelectedMembers(selectedMembers.filter(id => id !== memberId));
+        } else {
+            setSelectedMembers([...selectedMembers, memberId]);
+        }
+    };
+
+    const handleSelectAll = () => {
+        setSelectedMembers(filteredTeamMembers.map(m => m.id));
+    };
+
+    const handleDeselectAll = () => {
+        setSelectedMembers([]);
+    };
+
+    const handlePreviousWeek = () => {
+        if (!dateRange?.from) return;
+        const newStart = new Date(dateRange.from);
+        newStart.setDate(newStart.getDate() - 7);
+        const newEnd = new Date(dateRange.to || dateRange.from);
+        newEnd.setDate(newEnd.getDate() - 7);
+        setDateRange({ from: newStart, to: newEnd });
+    };
+
+    const handleNextWeek = () => {
+        if (!dateRange?.from) return;
+        const newStart = new Date(dateRange.from);
+        newStart.setDate(newStart.getDate() + 7);
+        const newEnd = new Date(dateRange.to || dateRange.from);
+        newEnd.setDate(newEnd.getDate() + 7);
+        setDateRange({ from: newStart, to: newEnd });
+    };
+
+    const getDisplayText = () => {
+        if (selectedMembers.length === 0) return 'No members selected';
+        if (selectedMembers.length === teamMembers.length) return 'All members';
+        return `${selectedMembers.length} member${selectedMembers.length > 1 ? 's' : ''} selected`;
+    };
+
     return (
         <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
@@ -67,7 +124,118 @@ export default function WeeklyLogsPage() {
                     <p className="text-muted-foreground">Detailed weekly timesheet and attendance analysis.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <DateRangePresetPicker date={dateRange} setDate={setDateRange} />
+                    {/* Team Members Filter Dropdown */}
+                    <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-[220px] justify-between">
+                                <span className="truncate">{getDisplayText()}</span>
+                                <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[320px] p-0" align="end">
+                            <div className="flex flex-col">
+                                {/* Search Bar */}
+                                <div className="p-3 border-b">
+                                    <div className="relative">
+                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Search"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="pl-9 h-9"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Header with Select/Deselect All */}
+                                <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/50">
+                                    <span className="text-sm font-medium text-muted-foreground">
+                                        {teamMembers.length} People
+                                    </span>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={selectedMembers.length === filteredTeamMembers.length ? handleDeselectAll : handleSelectAll}
+                                    >
+                                        {selectedMembers.length === filteredTeamMembers.length ? 'Deselect All' : 'Select All'}
+                                    </Button>
+                                </div>
+
+                                {/* Team Members List */}
+                                <div className="max-h-[300px] overflow-y-auto">
+                                    {filteredTeamMembers.map((member) => {
+                                        const isSelected = selectedMembers.includes(member.id);
+                                        const initials = member.username.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+                                        return (
+                                            <div
+                                                key={member.id}
+                                                className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors"
+                                                onClick={() => handleToggleMember(member.id)}
+                                            >
+                                                {/* Avatar */}
+                                                {member.profilePicture ? (
+                                                    <img
+                                                        src={member.profilePicture}
+                                                        alt={member.username}
+                                                        className="w-8 h-8 rounded-full"
+                                                    />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold">
+                                                        {initials}
+                                                    </div>
+                                                )}
+
+                                                {/* Name */}
+                                                <span className="flex-1 text-sm font-medium">{member.username}</span>
+
+                                                {/* Checkbox */}
+                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${isSelected
+                                                    ? 'bg-blue-600 border-blue-600'
+                                                    : 'border-gray-300'
+                                                    }`}>
+                                                    {isSelected && (
+                                                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {filteredTeamMembers.length === 0 && (
+                                    <div className="p-6 text-center text-sm text-muted-foreground">
+                                        No members found
+                                    </div>
+                                )}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
+                    {/* Week Navigation */}
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={handlePreviousWeek}
+                            title="Previous week"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <DateRangePresetPicker date={dateRange} setDate={setDateRange} />
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={handleNextWeek}
+                            title="Next week"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+
                     <Button variant="outline" size="icon" onClick={refreshData} disabled={isLoading}>
                         <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                     </Button>

@@ -1,9 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Calendar, FileText, Users, Database, LogOut } from 'lucide-react';
+import { LayoutDashboard, Calendar, FileText, Users, Database, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
@@ -36,6 +37,7 @@ const navItems = [
 
 export function Sidebar() {
     const pathname = usePathname();
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     const handleLogout = async () => {
         try {
@@ -47,12 +49,27 @@ export function Sidebar() {
     };
 
     return (
-        <div className="flex flex-col h-screen w-64 bg-white border-r">
-            <div className="p-6 border-b">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    SuperAdmin
-                </h1>
-                <p className="text-xs text-gray-500 mt-1">Attendance Dashboard</p>
+        <div className={cn(
+            'flex flex-col h-screen bg-white border-r transition-all duration-300',
+            isCollapsed ? 'w-16' : 'w-64'
+        )}>
+            <div className="p-6 border-b flex items-center justify-between">
+                {!isCollapsed && (
+                    <div>
+                        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                            SuperAdmin
+                        </h1>
+                        <p className="text-xs text-gray-500 mt-1">Attendance Dashboard</p>
+                    </div>
+                )}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className={cn('h-8 w-8', isCollapsed && 'mx-auto')}
+                >
+                    {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                </Button>
             </div>
 
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -63,12 +80,14 @@ export function Sidebar() {
                             <Button
                                 variant={isActive ? 'secondary' : 'ghost'}
                                 className={cn(
-                                    'w-full justify-start mb-1',
+                                    'w-full mb-1',
+                                    isCollapsed ? 'justify-center px-2' : 'justify-start',
                                     isActive && 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                                 )}
+                                title={isCollapsed ? item.title : undefined}
                             >
-                                <item.icon className={cn('w-4 h-4 mr-2', isActive ? 'text-blue-600' : 'text-gray-500')} />
-                                {item.title}
+                                <item.icon className={cn('h-4 w-4', isActive ? 'text-blue-600' : 'text-gray-500', !isCollapsed && 'mr-2')} />
+                                {!isCollapsed && item.title}
                             </Button>
                         </Link>
                     );
@@ -78,11 +97,15 @@ export function Sidebar() {
             <div className="p-4 border-t">
                 <Button
                     variant="ghost"
-                    className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className={cn(
+                        'w-full text-red-600 hover:text-red-700 hover:bg-red-50',
+                        isCollapsed ? 'justify-center px-2' : 'justify-start'
+                    )}
                     onClick={handleLogout}
+                    title={isCollapsed ? 'Logout' : undefined}
                 >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Logout
+                    <LogOut className={cn('h-4 w-4', !isCollapsed && 'mr-2')} />
+                    {!isCollapsed && 'Logout'}
                 </Button>
             </div>
         </div>
