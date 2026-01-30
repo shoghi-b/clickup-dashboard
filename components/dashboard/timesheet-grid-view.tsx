@@ -287,8 +287,78 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
   if (loading) {
     return (
       <Card>
-        <CardContent className="p-6">
-          <p className="text-center text-gray-500">Loading...</p>
+        <CardHeader>
+          <CardTitle>Team Timesheet & Attendance Grid</CardTitle>
+          <CardDescription>Loading timesheet data...</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b-2">
+                  <th className="text-left p-3 font-medium text-gray-700 sticky left-0 bg-white z-10 border-r">
+                    People
+                  </th>
+                  {[...Array(7)].map((_, i) => (
+                    <th key={i} colSpan={2} className="text-center p-2 font-medium border-r text-gray-700">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse w-24 mx-auto"></div>
+                    </th>
+                  ))}
+                  <th colSpan={2} className="text-center p-2 font-medium text-gray-700">Total</th>
+                </tr>
+                <tr className="border-b bg-gray-50">
+                  <th className="sticky left-0 bg-gray-50 z-10 border-r"></th>
+                  {[...Array(7)].map((_, i) => (
+                    <React.Fragment key={i}>
+                      <th className="text-center p-2 text-xs font-medium text-gray-600 min-w-[80px]">
+                        ClickUp
+                      </th>
+                      <th className="text-center p-2 text-xs font-medium text-gray-600 min-w-[80px] border-r">
+                        Attendance
+                      </th>
+                    </React.Fragment>
+                  ))}
+                  <th className="text-center p-2 text-xs font-medium text-gray-600 min-w-[80px]">
+                    ClickUp
+                  </th>
+                  <th className="text-center p-2 text-xs font-medium text-gray-600 min-w-[80px]">
+                    Attendance
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...Array(5)].map((_, rowIndex) => (
+                  <tr key={rowIndex} className="border-b">
+                    <td className="p-3 sticky left-0 bg-white z-10 border-r">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded animate-pulse w-24 mb-1"></div>
+                          <div className="h-3 bg-gray-100 rounded animate-pulse w-12"></div>
+                        </div>
+                      </div>
+                    </td>
+                    {[...Array(7)].map((_, dayIndex) => (
+                      <React.Fragment key={dayIndex}>
+                        <td className="p-1 text-center">
+                          <div className="h-7 bg-gray-100 rounded animate-pulse mx-auto w-12"></div>
+                        </td>
+                        <td className="p-1 text-center border-r">
+                          <div className="h-7 bg-gray-100 rounded animate-pulse mx-auto w-12"></div>
+                        </td>
+                      </React.Fragment>
+                    ))}
+                    <td className="p-1 text-center">
+                      <div className="h-7 bg-gray-100 rounded animate-pulse mx-auto w-12"></div>
+                    </td>
+                    <td className="p-1 text-center">
+                      <div className="h-7 bg-gray-100 rounded animate-pulse mx-auto w-12"></div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     );

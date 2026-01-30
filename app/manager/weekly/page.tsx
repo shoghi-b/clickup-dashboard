@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useDashboard } from '../dashboard-context';
 import { WeeklyKPICards } from '@/components/dashboard/weekly-kpi-cards';
 import { TimesheetGridView } from '@/components/dashboard/timesheet-grid-view';
@@ -18,9 +18,17 @@ import {
 export default function WeeklyLogsPage() {
     const { weeklyKPIData, dateRange, setDateRange, teamMembers, selectedMembers, setSelectedMembers, refreshData, isLoading } = useDashboard();
 
+    // Track client-side mounting to prevent hydration mismatch
+    const [isMounted, setIsMounted] = useState(false);
+
     // Search & Filter State
     const [searchQuery, setSearchQuery] = useState('');
     const [filterOpen, setFilterOpen] = useState(false);
+
+    // Set mounted after client-side hydration
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     // Drill Down State
     const [drillDownOpen, setDrillDownOpen] = useState(false);
@@ -111,6 +119,9 @@ export default function WeeklyLogsPage() {
     };
 
     const getDisplayText = () => {
+        // During SSR, always return placeholder to match server render
+        if (!isMounted) return 'Loading...';
+
         if (selectedMembers.length === 0) return 'No members selected';
         if (selectedMembers.length === teamMembers.length) return 'All members';
         return `${selectedMembers.length} member${selectedMembers.length > 1 ? 's' : ''} selected`;
