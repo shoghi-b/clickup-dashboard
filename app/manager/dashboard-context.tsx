@@ -38,7 +38,20 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         to: endOfWeek(new Date(), { weekStartsOn: 1 }),
     });
     const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
-    const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+    const [selectedMembers, setSelectedMembers] = useState<string[]>(() => {
+        // Load from session storage on initial mount
+        if (typeof window !== 'undefined') {
+            const saved = sessionStorage.getItem('manager_selected_members');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    console.error('Failed to parse saved members:', e);
+                }
+            }
+        }
+        return [];
+    });
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [stats, setStats] = useState<DashboardStats>({
         totalTeamMembers: 0,
@@ -48,6 +61,13 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     });
     const [weeklyKPIData, setWeeklyKPIData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
+
+    // Save selected members to session storage whenever it changes
+    useEffect(() => {
+        if (typeof window !== 'undefined' && selectedMembers.length > 0) {
+            sessionStorage.setItem('manager_selected_members', JSON.stringify(selectedMembers));
+        }
+    }, [selectedMembers]);
 
     // Initial load
     useEffect(() => {
@@ -106,8 +126,13 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
             const result = await response.json();
             if (result.success) {
                 setTeamMembers(result.data);
+                // Only auto-select if no saved selection AND current selection is empty
                 if (selectedMembers.length === 0) {
-                    setSelectedMembers(result.data.map((m: TeamMember) => m.id));
+                    // Check session storage one more time before auto-selecting
+                    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('manager_selected_members') : null;
+                    if (!saved) {
+                        setSelectedMembers(result.data.map((m: TeamMember) => m.id));
+                    }
                 }
             }
         } catch (error) {

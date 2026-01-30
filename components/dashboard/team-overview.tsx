@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
 
 interface TeamMember {
   id: string;
@@ -18,15 +20,18 @@ interface TeamMember {
 
 interface TeamOverviewProps {
   selectedMembers: string[];
+  onToggleMember?: (memberId: string) => void;
+  onSelectAll?: () => void;
+  onDeselectAll?: () => void;
 }
 
-export function TeamOverview({ selectedMembers }: TeamOverviewProps) {
+export function TeamOverview({ selectedMembers, onToggleMember, onSelectAll, onDeselectAll }: TeamOverviewProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchTeamMembers();
-  }, [selectedMembers]);
+  }, []);
 
   const fetchTeamMembers = async () => {
     try {
@@ -34,11 +39,7 @@ export function TeamOverview({ selectedMembers }: TeamOverviewProps) {
       const result = await response.json();
 
       if (result.success) {
-        // Filter members based on selection
-        const filteredMembers = result.data.filter((member: TeamMember) =>
-          selectedMembers.includes(member.id)
-        );
-        setTeamMembers(filteredMembers);
+        setTeamMembers(result.data);
       }
     } catch (error) {
       console.error('Failed to fetch team members:', error);
@@ -46,6 +47,16 @@ export function TeamOverview({ selectedMembers }: TeamOverviewProps) {
       setLoading(false);
     }
   };
+
+  const handleToggle = (memberId: string) => {
+    if (onToggleMember) {
+      onToggleMember(memberId);
+    }
+  };
+
+  const activeCount = selectedMembers.length;
+  const totalCount = teamMembers.length;
+  const allSelected = activeCount === totalCount && totalCount > 0;
 
   if (loading) {
     return (
@@ -57,37 +68,68 @@ export function TeamOverview({ selectedMembers }: TeamOverviewProps) {
     );
   }
 
-  if (teamMembers.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Team Overview</CardTitle>
-          <CardDescription>No team members found. Click "Sync Data" to fetch team data.</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Team Overview</CardTitle>
-        <CardDescription>All team members and their work expectations</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Team Member</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Expected Hours/Day</TableHead>
-              <TableHead>Expected Hours/Week</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {teamMembers.map((member) => (
-              <TableRow key={member.id}>
+    <div className="space-y-4">
+      {/* Header with controls */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-700">
+            Active Members: <span className="text-blue-600 font-semibold">{activeCount}/{totalCount}</span>
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Only active members will load data across all views
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {allSelected ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDeselectAll}
+            >
+              Deselect All
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSelectAll}
+            >
+              Select All
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Members table */}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[80px]">Status</TableHead>
+            <TableHead>Team Member</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead>Expected Hours/Day</TableHead>
+            <TableHead>Expected Hours/Week</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {teamMembers.map((member) => {
+            const isActive = selectedMembers.includes(member.id);
+            return (
+              <TableRow key={member.id} className={!isActive ? 'opacity-50' : ''}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={isActive}
+                      onCheckedChange={() => handleToggle(member.id)}
+                    />
+                    {isActive ? (
+                      <span className="text-green-600 text-lg">🟢</span>
+                    ) : (
+                      <span className="text-gray-400 text-lg">⚪</span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
                     {member.profilePicture && (
@@ -114,15 +156,11 @@ export function TeamOverview({ selectedMembers }: TeamOverviewProps) {
                 </TableCell>
                 <TableCell>{member.expectedHoursPerDay}h</TableCell>
                 <TableCell>{member.expectedHoursPerWeek}h</TableCell>
-                <TableCell>
-                  <Badge className="bg-green-100 text-green-800">Active</Badge>
-                </TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
-
