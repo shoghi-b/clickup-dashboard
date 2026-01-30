@@ -14,8 +14,11 @@ export async function GET(request: Request) {
     let dayEnd: Date;
 
     if (startDateParam && endDateParam) {
-      dayStart = startOfDay(new Date(startDateParam));
-      dayEnd = endOfDay(new Date(endDateParam));
+      // Parse dates as YYYY-MM-DD in local timezone
+      const [startYear, startMonth, startDay] = startDateParam.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endDateParam.split('-').map(Number);
+      dayStart = startOfDay(new Date(startYear, startMonth - 1, startDay));
+      dayEnd = endOfDay(new Date(endYear, endMonth - 1, endDay));
     } else {
       const date = new Date();
       dayStart = startOfDay(date);

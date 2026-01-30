@@ -76,12 +76,12 @@ export function ProjectBreakdownSheet({
     setLoading(true);
     try {
       const params = new URLSearchParams({ teamMemberId });
-      
+
       if (date) {
-        params.append('date', date.toISOString());
+        params.append('date', format(date, 'yyyy-MM-dd'));
       } else if (startDate && endDate) {
-        params.append('startDate', startDate.toISOString());
-        params.append('endDate', endDate.toISOString());
+        params.append('startDate', format(startDate, 'yyyy-MM-dd'));
+        params.append('endDate', format(endDate, 'yyyy-MM-dd'));
       }
 
       const response = await fetch(`/api/time-entries/project-breakdown?${params}`);

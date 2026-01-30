@@ -93,8 +93,8 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
 
       // Fetch daily summaries (ClickUp data) - use full week range
       const params = new URLSearchParams({
-        startDate: weekStart.toISOString(),
-        endDate: weekEnd.toISOString(),
+        startDate: format(weekStart, 'yyyy-MM-dd'),
+        endDate: format(weekEnd, 'yyyy-MM-dd'),
       });
       const summariesResponse = await fetch(`/api/analytics/daily?${params}`);
       const summariesResult = await summariesResponse.json();
@@ -291,9 +291,8 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
                       <th
                         key={day.toISOString()}
                         colSpan={2}
-                        className={`text-center p-2 font-medium border-r ${
-                          isWeekend ? 'bg-gray-50 text-gray-600' : 'text-gray-700'
-                        }`}
+                        className={`text-center p-2 font-medium border-r ${isWeekend ? 'bg-gray-50 text-gray-600' : 'text-gray-700'
+                          }`}
                       >
                         <div className="text-sm">{format(day, 'EEE, MMM d')}</div>
                       </th>

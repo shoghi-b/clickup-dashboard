@@ -8,24 +8,27 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const employeeName = searchParams.get('employeeName');
-    
+
     // Build where clause
     const where: any = {};
-    
+
     if (startDate && endDate) {
+      // Parse dates as YYYY-MM-DD in local timezone
+      const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
       where.date = {
-        gte: startOfDay(new Date(startDate)),
-        lte: endOfDay(new Date(endDate))
+        gte: startOfDay(new Date(startYear, startMonth - 1, startDay)),
+        lte: endOfDay(new Date(endYear, endMonth - 1, endDay))
       };
     }
-    
+
     if (employeeName) {
       where.employeeName = {
         contains: employeeName,
         mode: 'insensitive'
       };
     }
-    
+
     // Fetch attendance records
     const records = await prisma.attendanceRecord.findMany({
       where,
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
         { date: 'asc' }
       ]
     });
-    
+
     // Group by employee
     const groupedByEmployee = records.reduce((acc: Record<string, typeof records>, record) => {
       if (!acc[record.employeeName]) {
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest) {
       acc[record.employeeName].push(record);
       return acc;
     }, {} as Record<string, typeof records>);
-    
+
     // Calculate summary statistics
     const summary = {
       totalRecords: records.length,
@@ -52,21 +55,21 @@ export async function GET(request: NextRequest) {
       absentCount: records.filter((r) => r.status === 'ABSENT').length,
       partialCount: records.filter((r) => r.status === 'PARTIAL').length,
       totalHours: records.reduce((sum: number, r) => sum + r.totalHours, 0),
-      averageHoursPerDay: records.length > 0 
+      averageHoursPerDay: records.length > 0
         ? records.reduce((sum: number, r) => sum + r.totalHours, 0) / records.filter((r) => r.status === 'PRESENT').length
         : 0
     };
-    
+
     return NextResponse.json({
       success: true,
       records,
       groupedByEmployee,
       summary
     });
-    
+
   } catch (error) {
     console.error('Error fetching attendance records:', error);
-    
+
     return NextResponse.json(
       {
         success: false,

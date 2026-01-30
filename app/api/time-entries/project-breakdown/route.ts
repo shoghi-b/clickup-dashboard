@@ -20,17 +20,22 @@ export async function GET(request: NextRequest) {
     // Build date filter
     let dateFilter: any = {};
     if (date) {
-      // Single day query
-      const targetDate = new Date(date);
+      // Single day query - parse date as YYYY-MM-DD in local timezone
+      const [year, month, day] = date.split('-').map(Number);
+      const targetDate = new Date(year, month - 1, day);
       dateFilter = {
         gte: startOfDay(targetDate),
         lte: endOfDay(targetDate),
       };
     } else if (startDate && endDate) {
-      // Date range query
+      // Date range query - parse dates as YYYY-MM-DD in local timezone
+      const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+      const parsedStartDate = new Date(startYear, startMonth - 1, startDay);
+      const parsedEndDate = new Date(endYear, endMonth - 1, endDay);
       dateFilter = {
-        gte: startOfDay(new Date(startDate)),
-        lte: endOfDay(new Date(endDate)),
+        gte: startOfDay(parsedStartDate),
+        lte: endOfDay(parsedEndDate),
       };
     } else {
       return NextResponse.json(
