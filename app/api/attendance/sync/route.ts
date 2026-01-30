@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
             employeeCode: entry.employeeCode,
             date: entry.date,
             inOutPeriods: JSON.stringify(entry.inOutPeriods),
+            unpairedIns: JSON.stringify(entry.unpairedIns),
+            unpairedOuts: JSON.stringify(entry.unpairedOuts),
             firstIn: entry.firstIn,
             lastOut: entry.lastOut,
             totalHours: entry.totalHours,

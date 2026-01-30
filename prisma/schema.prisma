@@ -195,6 +195,8 @@ model AttendanceRecord {
 
   // Time tracking - All IN/OUT periods as JSON array
   inOutPeriods    String?       // JSON: [{"in":"10:26","out":"11:23"},{"in":"14:59","out":"15:17"}]
+  unpairedIns     String?       // JSON: ["08:30","19:00"] - IN entries without matching OUT
+  unpairedOuts    String?       // JSON: ["12:45"] - OUT entries without matching IN
 
   // Time tracking - Legacy fields (kept for backward compatibility)
   firstIn         String?       // First IN time (HH:mm format)

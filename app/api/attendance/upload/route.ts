@@ -73,6 +73,8 @@ export async function POST(request: NextRequest) {
           employeeCode: entry.employeeCode,
           date: entry.date,
           inOutPeriods: JSON.stringify(entry.inOutPeriods),
+          unpairedIns: JSON.stringify([]),  // File parsing doesn't compute unpaired, only API sync does
+          unpairedOuts: JSON.stringify([]), // File parsing doesn't compute unpaired, only API sync does
           firstIn: entry.firstIn,
           lastOut: entry.lastOut,
           totalHours: entry.totalHours,

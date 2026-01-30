@@ -29,6 +29,8 @@ export interface AttendanceEntry {
     employeeCode: string;
     date: Date;
     inOutPeriods: { in: string; out: string }[];
+    unpairedIns: string[]; // IN entries without matching OUT
+    unpairedOuts: string[]; // OUT entries without matching IN
     firstIn: string | null;
     lastOut: string | null;
     totalHours: number;
@@ -72,7 +74,7 @@ export async function fetchAttendanceData(startDate: Date, endDate: Date): Promi
 }
 
 /**
- * Process raw punch data into attendance records
+ * Process raw punch data into attendance records with improved MCID pairing logic
  */
 export function processPunchData(punchData: PunchData[]): AttendanceEntry[] {
     // Group punches by Employee and Date
@@ -99,60 +101,165 @@ export function processPunchData(punchData: PunchData[]): AttendanceEntry[] {
         const [day, month, year] = dateStr.split('/').map(Number);
         const date = new Date(year, month - 1, day);
 
-        // Sort punches by time
-        punches.sort((a, b) => {
-            // Parse "dd/MM/yyyy HH:mm:ss" manually to ensure correct sorting
-            const parseDate = (d: string) => {
-                const [dPart, tPart] = d.split(' ');
-                const [dd, mm, yy] = dPart.split('/').map(Number);
-                const [hh, min, ss] = tPart.split(':').map(Number);
-                return new Date(yy, mm - 1, dd, hh, min, ss).getTime();
-            };
-            return parseDate(a.PunchDate) - parseDate(b.PunchDate);
-        });
+        // Helper function to parse punch time
+        const parseDateTime = (punchDate: string): Date => {
+            const [dPart, tPart] = punchDate.split(' ');
+            const [dd, mm, yy] = dPart.split('/').map(Number);
+            const [hh, min, ss] = tPart.split(':').map(Number);
+            return new Date(yy, mm - 1, dd, hh, min, ss);
+        };
 
-        const inOutPeriods: { in: string; out: string }[] = [];
+        // Helper function to extract time part as HH:mm
+        const extractTime = (punchDate: string): string => {
+            return punchDate.split(' ')[1].substring(0, 5); // HH:mm
+        };
 
-        // Logic to pair IN (mcid: 1) and OUT (mcid: 2)
-        // Assumption: Sorted chronologically. 
-        // We look for sequences of 1 -> 2.
-        // If we have 1 -> 1, the first 1 is ignored (or maybe we take the first 1? Let's stick to simple pairing first)
-        // Actually, usually 1 is entrance. If multiple 1s appear without a 2, maybe the last 1 is the valid one before the 2? 
-        // Or maybe the first 1 is the valid one? 
-        // Let's assume strict pairing: 1 opens a session, 2 closes it.
+        // Sort all punches chronologically
+        punches.sort((a, b) => parseDateTime(a.PunchDate).getTime() - parseDateTime(b.PunchDate).getTime());
 
-        let currentIn: string | null = null;
+        // Separate INs and OUTs
+        interface TimedEntry {
+            time: string;
+            timestamp: number;
+            original: PunchData;
+        }
+
+        const inEntries: TimedEntry[] = [];
+        const outEntries: TimedEntry[] = [];
 
         for (const punch of punches) {
-            const timePart = punch.PunchDate.split(' ')[1].substring(0, 5); // HH:mm
+            const timeStr = extractTime(punch.PunchDate);
+            const timestamp = parseDateTime(punch.PunchDate).getTime();
+            const entry: TimedEntry = { time: timeStr, timestamp, original: punch };
 
             if (punch.mcid === '1') {
-                if (!currentIn) {
-                    currentIn = timePart;
-                } else {
-                    // We already have an IN.
-                    // Scenario: IN(10:00), IN(10:05) -> OUT(12:00)
-                    // Which IN is correct? Usually the first one. 
-                    // Let's keep the first IN.
-                }
+                inEntries.push(entry);
             } else if (punch.mcid === '2') {
-                if (currentIn) {
-                    inOutPeriods.push({ in: currentIn, out: timePart });
-                    currentIn = null;
-                } else {
-                    // OUT without IN. Ignore or mark?
-                    // For now, ignore orphan OUTs as we can't calculate duration.
-                }
+                outEntries.push(entry);
             }
         }
 
-        // If there is a dangling IN at the end (User forgot to punch out)
-        // We cannot form a period. It will be ignored for duration calculation but indicates presence.
+        // Build IN-OUT pairs using improved algorithm
+        // Strategy: For each IN, find the next chronological OUT
+        // If multiple INs before an OUT, use the earliest IN
+        // If multiple OUTs after an IN, use the latest OUT before the next IN
 
-        const firstIn = inOutPeriods.length > 0 ? inOutPeriods[0].in : (currentIn || null);
-        const lastOut = inOutPeriods.length > 0 ? inOutPeriods[inOutPeriods.length - 1].out : null;
+        const inOutPeriods: { in: string; out: string }[] = [];
+        let usedInIndices = new Set<number>();
+        let usedOutIndices = new Set<number>();
 
-        // Calculate total duration
+        for (let i = 0; i < inEntries.length; i++) {
+            if (usedInIndices.has(i)) continue;
+
+            const currentIn = inEntries[i];
+
+            // Find all OUTs after this IN
+            const subsequentOuts = outEntries.filter((out, idx) =>
+                !usedOutIndices.has(idx) && out.timestamp > currentIn.timestamp
+            );
+
+            if (subsequentOuts.length === 0) {
+                // No OUT found for this IN - will show as PARTIAL
+                continue;
+            }
+
+            // Check if there's another IN before the first OUT
+            const firstOutAfterIn = subsequentOuts[0];
+            const duplicateIns = inEntries.filter((entry, idx) =>
+                idx > i &&
+                !usedInIndices.has(idx) &&
+                entry.timestamp > currentIn.timestamp &&
+                entry.timestamp < firstOutAfterIn.timestamp
+            );
+
+            if (duplicateIns.length > 0) {
+                // Log duplicate IN entries being skipped
+                console.log(`[Attendance Pairing] Duplicate IN entries found for ${empName} on ${dateStr}:`, {
+                    kept: currentIn.time,
+                    discarded: duplicateIns.map(d => d.time)
+                });
+                // Mark duplicate INs as used
+                duplicateIns.forEach(dup => {
+                    const dupIdx = inEntries.findIndex(e => e.timestamp === dup.timestamp);
+                    if (dupIdx !== -1) usedInIndices.add(dupIdx);
+                });
+            }
+
+            // Find the appropriate OUT for this IN
+            // If there's another IN after this one, use the last OUT before that next IN
+            // Otherwise, use the last OUT available
+            const nextInAfterCurrent = inEntries.find((entry, idx) =>
+                idx > i &&
+                !usedInIndices.has(idx) &&
+                entry.timestamp > currentIn.timestamp
+            );
+
+            let matchingOut: TimedEntry;
+            if (nextInAfterCurrent) {
+                // Find all OUTs between current IN and next IN
+                const outsBeforeNextIn = subsequentOuts.filter(out =>
+                    out.timestamp < nextInAfterCurrent.timestamp
+                );
+
+                if (outsBeforeNextIn.length > 0) {
+                    // Use the latest OUT before next IN
+                    matchingOut = outsBeforeNextIn[outsBeforeNextIn.length - 1];
+
+                    if (outsBeforeNextIn.length > 1) {
+                        console.log(`[Attendance Pairing] Multiple OUT entries found for ${empName} on ${dateStr}:`, {
+                            used: matchingOut.time,
+                            discarded: outsBeforeNextIn.slice(0, -1).map(o => o.time)
+                        });
+                    }
+                } else {
+                    // No OUT before next IN, skip this IN
+                    continue;
+                }
+            } else {
+                // This is the last IN, use the latest OUT available
+                matchingOut = subsequentOuts[subsequentOuts.length - 1];
+
+                if (subsequentOuts.length > 1) {
+                    console.log(`[Attendance Pairing] Multiple OUT entries found for ${empName} on ${dateStr}:`, {
+                        used: matchingOut.time,
+                        discarded: subsequentOuts.slice(0, -1).map(o => o.time)
+                    });
+                }
+            }
+
+            // Create the pair
+            inOutPeriods.push({
+                in: currentIn.time,
+                out: matchingOut.time
+            });
+
+            // Mark as used
+            usedInIndices.add(i);
+            const outIdx = outEntries.findIndex(e => e.timestamp === matchingOut.timestamp);
+            if (outIdx !== -1) usedOutIndices.add(outIdx);
+        }
+
+        // Calculate first IN and last OUT from ALL entries (not just paired ones)
+        const firstIn = inEntries.length > 0 ? inEntries[0].time : null;
+        const lastOut = outEntries.length > 0 ? outEntries[outEntries.length - 1].time : null;
+
+        // Collect unpaired INs and OUTs
+        const unpairedIns: string[] = [];
+        const unpairedOuts: string[] = [];
+
+        for (let i = 0; i < inEntries.length; i++) {
+            if (!usedInIndices.has(i)) {
+                unpairedIns.push(inEntries[i].time);
+            }
+        }
+
+        for (let i = 0; i < outEntries.length; i++) {
+            if (!usedOutIndices.has(i)) {
+                unpairedOuts.push(outEntries[i].time);
+            }
+        }
+
+        // Calculate total duration from pairs
         let totalMinutes = 0;
         for (const period of inOutPeriods) {
             const [inH, inM] = period.in.split(':').map(Number);
@@ -161,21 +268,27 @@ export function processPunchData(punchData: PunchData[]): AttendanceEntry[] {
             const start = inH * 60 + inM;
             const end = outH * 60 + outM;
 
-            totalMinutes += (end - start);
+            const duration = end - start;
+
+            // Handle edge case where OUT is before IN (data error)
+            if (duration < 0) {
+                console.warn(`[Attendance Pairing] Invalid pair for ${empName} on ${dateStr}: OUT (${period.out}) before IN (${period.in})`);
+                continue;
+            }
+
+            totalMinutes += duration;
         }
 
         const totalHours = totalMinutes / 60;
 
+        // Determine status
         let status: 'PRESENT' | 'ABSENT' | 'PARTIAL' = 'ABSENT';
         if (inOutPeriods.length > 0) {
-            // If total duration is very low (e.g. < 4 hours), maybe PARTIAL?
-            // Matching current logic: if present > 0 it is roughly PRESENT or PARTIAL.
-            // Let's use simple logic: > 0 hours = PRESENT (or PARTIAL if very low).
-            // For now, just mark PRESENT if any valid period, otherwise PARTIAL if punches exist but no valid period?
             status = 'PRESENT';
         } else if (punches.length > 0) {
-            // Has punches but no complete intervals
+            // Has punches but no complete IN-OUT pairs
             status = 'PARTIAL';
+            console.log(`[Attendance Pairing] PARTIAL status for ${empName} on ${dateStr}: ${inEntries.length} INs, ${outEntries.length} OUTs, but no valid pairs`);
         }
 
         entries.push({
@@ -183,6 +296,8 @@ export function processPunchData(punchData: PunchData[]): AttendanceEntry[] {
             employeeCode: empCode,
             date: date,
             inOutPeriods,
+            unpairedIns,
+            unpairedOuts,
             firstIn,
             lastOut,
             totalHours,

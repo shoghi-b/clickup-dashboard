@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { ProjectBreakdownSheet } from './project-breakdown-sheet';
+import { AttendanceDetailsSheet } from './attendance-details-sheet';
 
 interface DailySummary {
   id: string;
@@ -24,6 +24,9 @@ interface AttendanceRecord {
   employeeName: string;
   employeeCode: string | null;
   date: string;
+  inOutPeriods: string; // JSON string of { in: string; out: string }[]
+  unpairedIns: string; // JSON string of string[]
+  unpairedOuts: string; // JSON string of string[]
   firstIn: string | null;
   lastOut: string | null;
   totalHours: number;
@@ -50,6 +53,9 @@ interface DayData {
   clickupHours: number;
   attendanceHours: number;
   attendanceStatus: 'PRESENT' | 'ABSENT' | 'PARTIAL' | null;
+  inOutPeriods: { in: string; out: string }[];
+  unpairedIns: string[];
+  unpairedOuts: string[];
   firstIn: string | null;
   lastOut: string | null;
 }
@@ -69,6 +75,10 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
   const [selectedMember, setSelectedMember] = useState<{ id: string; name: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedDateRange, setSelectedDateRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [attendanceDetailsOpen, setAttendanceDetailsOpen] = useState(false);
+  const [selectedAttendanceMember, setSelectedAttendanceMember] = useState<string>('');
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState<Date | null>(null);
+  const [selectedAttendanceData, setSelectedAttendanceData] = useState<DayData | null>(null);
 
   useEffect(() => {
     // Calculate the week days to display (Monday to Sunday)
@@ -135,6 +145,9 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
                 clickupHours: 0,
                 attendanceHours: 0,
                 attendanceStatus: null,
+                inOutPeriods: [],
+                unpairedIns: [],
+                unpairedOuts: [],
                 firstIn: null,
                 lastOut: null,
               };
@@ -165,6 +178,9 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
                 clickupHours: 0,
                 attendanceHours: 0,
                 attendanceStatus: null,
+                inOutPeriods: [],
+                unpairedIns: [],
+                unpairedOuts: [],
                 firstIn: null,
                 lastOut: null,
               };
@@ -172,6 +188,24 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
               existing.attendanceStatus = record.status;
               existing.firstIn = record.firstIn;
               existing.lastOut = record.lastOut;
+              // Parse inOutPeriods from JSON string
+              try {
+                existing.inOutPeriods = JSON.parse((record as any).inOutPeriods || '[]');
+              } catch (e) {
+                existing.inOutPeriods = [];
+              }
+              // Parse unpairedIns from JSON string
+              try {
+                existing.unpairedIns = JSON.parse((record as any).unpairedIns || '[]');
+              } catch (e) {
+                existing.unpairedIns = [];
+              }
+              // Parse unpairedOuts from JSON string
+              try {
+                existing.unpairedOuts = JSON.parse((record as any).unpairedOuts || '[]');
+              } catch (e) {
+                existing.unpairedOuts = [];
+              }
               dailyData.set(dateKey, existing);
 
               // Only add to weekly total if it's within the current week
@@ -202,6 +236,9 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
       clickupHours: 0,
       attendanceHours: 0,
       attendanceStatus: null,
+      inOutPeriods: [],
+      unpairedIns: [],
+      unpairedOuts: [],
       firstIn: null,
       lastOut: null,
     };
@@ -269,7 +306,7 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
   }
 
   return (
-    <TooltipProvider>
+    <>
       <Card>
         <CardHeader>
           <CardTitle>Team Timesheet & Attendance Grid</CardTitle>
@@ -359,22 +396,17 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
                           {/* Attendance Column */}
                           <td className={`p-1 text-center border-r ${isWeekend ? 'bg-gray-50' : ''}`}>
                             {dayData.attendanceStatus ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className={`rounded px-2 py-1.5 text-xs font-medium cursor-help ${getAttendanceCellColor(dayData.attendanceStatus)}`}>
-                                    {formatHours(dayData.attendanceHours)}
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <div className="text-xs space-y-1">
-                                    <div className="font-semibold">{format(day, 'MMM d, yyyy')}</div>
-                                    <div>First IN: {dayData.firstIn || '--:--'}</div>
-                                    <div>Last OUT: {dayData.lastOut || '--:--'}</div>
-                                    <div>Total: {formatHours(dayData.attendanceHours)}</div>
-                                    <div className="font-medium">Status: {dayData.attendanceStatus}</div>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
+                              <div
+                                className={`rounded px-2 py-1.5 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all ${getAttendanceCellColor(dayData.attendanceStatus)}`}
+                                onClick={() => {
+                                  setSelectedAttendanceMember(row.member.username);
+                                  setSelectedAttendanceDate(day);
+                                  setSelectedAttendanceData(dayData);
+                                  setAttendanceDetailsOpen(true);
+                                }}
+                              >
+                                {formatHours(dayData.attendanceHours)}
+                              </div>
                             ) : (
                               <div className="rounded px-2 py-1.5 text-xs font-medium bg-gray-50 text-gray-400">
                                 -
@@ -416,7 +448,23 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
         startDate={selectedDateRange?.start || null}
         endDate={selectedDateRange?.end || null}
       />
-    </TooltipProvider>
+
+      {/* Attendance Details Sheet */}
+      <AttendanceDetailsSheet
+        open={attendanceDetailsOpen}
+        onOpenChange={setAttendanceDetailsOpen}
+        memberName={selectedAttendanceMember}
+        date={selectedAttendanceDate}
+        data={selectedAttendanceData ? {
+          inOutPeriods: selectedAttendanceData.inOutPeriods,
+          unpairedIns: selectedAttendanceData.unpairedIns,
+          unpairedOuts: selectedAttendanceData.unpairedOuts,
+          firstIn: selectedAttendanceData.firstIn,
+          lastOut: selectedAttendanceData.lastOut,
+          totalHours: selectedAttendanceData.attendanceHours,
+          status: selectedAttendanceData.attendanceStatus || 'ABSENT',
+        } : null}
+      />
+    </>
   );
 }
-
