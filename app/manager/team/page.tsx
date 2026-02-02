@@ -2,7 +2,6 @@
 
 import { useDashboard } from '../dashboard-context';
 import { TeamOverview } from '@/components/dashboard/team-overview';
-import { TeamAccessSheet } from '@/components/dashboard/team-access-sheet';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 export default function TeamSetupPage() {
@@ -26,14 +25,9 @@ export default function TeamSetupPage() {
 
     return (
         <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Team Setup</h2>
-                    <p className="text-muted-foreground">Manage members and access. Toggle members ON/OFF to control data loading.</p>
-                </div>
-                <div>
-                    <TeamAccessSheet teamMembers={teamMembers} onUpdate={refreshData} />
-                </div>
+            <div>
+                <h2 className="text-3xl font-bold tracking-tight">Team Setup</h2>
+                <p className="text-muted-foreground">Manage members and access. Toggle members ON/OFF to control data loading.</p>
             </div>
 
             <div className="grid gap-6">
