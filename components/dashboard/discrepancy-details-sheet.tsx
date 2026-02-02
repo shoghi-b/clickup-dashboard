@@ -126,8 +126,8 @@ export function DiscrepancyDetailsSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-full sm:max-w-[800px] sm:w-[40vw] flex flex-col h-full bg-gray-50/50">
-                <SheetHeader className="mb-4">
+            <SheetContent className="w-full sm:max-w-[800px] sm:w-[40vw] flex flex-col h-full bg-white">
+                <SheetHeader className="mb-4 pb-4 border-b">
                     <SheetTitle className="flex items-center gap-2 text-xl">
                         <AlertCircle className="w-5 h-5 text-gray-600" />
                         {getRuleTitle(rule)}
@@ -182,11 +182,11 @@ export function DiscrepancyDetailsSheet({
                                             </div>
                                         </div>
 
-                                        <div className="bg-orange-50/50 rounded-md p-3 border border-orange-100 mb-4">
+                                        <div className="bg-orange-50 rounded-md p-4 border border-orange-100 mb-4">
                                             {getDiscrepancyDetails(d)}
                                         </div>
 
-                                        <div className="flex justify-between items-center mt-2">
+                                        <div className="flex justify-between items-center gap-3 mt-4">
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -210,18 +210,18 @@ export function DiscrepancyDetailsSheet({
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => onResolve(d)}
-                                                className="h-8 border-gray-300 text-gray-700 hover:bg-gray-50"
+                                                className="h-8 border-gray-300 text-gray-700 hover:bg-gray-50 whitespace-nowrap"
                                             >
                                                 Resolve Entire Issue
                                             </Button>
                                         </div>
 
                                         {expandedId === d.id && (
-                                            <div className="mt-4 border-t border-gray-100 pt-3 animate-in slide-in-from-top-2 duration-200">
-                                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                            <div className="mt-6 pt-4 border-t border-gray-200 animate-in slide-in-from-top-2 duration-200">
+                                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                                                     Associated Tasks
                                                 </h4>
-                                                <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden">
+                                                <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden max-h-[400px] overflow-y-auto">
                                                     {loadingTasks ? (
                                                         <div className="p-8 text-center text-sm text-gray-500">
                                                             <div className="animate-pulse">Loading tasks...</div>
@@ -231,7 +231,7 @@ export function DiscrepancyDetailsSheet({
                                                             No specific tasks found relating to this discrepancy.
                                                         </div>
                                                     ) : (
-                                                        <div className="divide-y divide-gray-200">
+                                                        <div className="divide-y divide-gray-200 max-h-[350px] overflow-y-auto">
                                                             {tasks.map(task => (
                                                                 <div key={task.id} className="p-3 hover:bg-white transition-colors flex justify-between items-center gap-4 group">
                                                                     <div className="min-w-0 flex-1">
@@ -258,7 +258,8 @@ export function DiscrepancyDetailsSheet({
                                                                     </div>
                                                                     <Button
                                                                         size="sm"
-                                                                        className="h-8 text-xs bg-white text-gray-700 border hover:bg-gray-50 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        variant="outline"
+                                                                        className="h-8 text-xs bg-white text-gray-700 border hover:bg-gray-50 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shrink-0"
                                                                         onClick={() => onResolve(
                                                                             d,
                                                                             `Task: ${task.taskName} (${task.clickupId || 'No ID'}) - Logged at ${format(new Date(task.loggedAt), 'h:mm a')}`

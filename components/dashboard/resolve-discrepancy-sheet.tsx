@@ -17,6 +17,7 @@ interface ResolveDiscrepancySheetProps {
     discrepancy: Discrepancy | null;
     initialNote?: string;
     onResolved?: () => void;
+    onSubmit?: (note: string) => Promise<void>;
 }
 
 const RESOLUTION_REASONS = [
@@ -33,7 +34,8 @@ export function ResolveDiscrepancySheet({
     onOpenChange,
     discrepancy,
     initialNote = '',
-    onResolved
+    onResolved,
+    onSubmit
 }: ResolveDiscrepancySheetProps) {
     const onClose = () => onOpenChange(false);
     const [selectedReason, setSelectedReason] = useState('');
@@ -63,20 +65,26 @@ export function ResolveDiscrepancySheet({
         setError(null);
 
         try {
-            const response = await fetch('/api/discrepancies/resolve', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    discrepancyId: discrepancy.id,
-                    reason: selectedReason,
-                    note: notes.trim() || undefined
-                })
-            });
+            // Use onSubmit prop if provided, otherwise use internal API call
+            if (onSubmit) {
+                const note = `${RESOLUTION_REASONS.find(r => r.value === selectedReason)?.label}: ${notes.trim()}`;
+                await onSubmit(note);
+            } else {
+                const response = await fetch('/api/discrepancies/resolve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        discrepancyId: discrepancy.id,
+                        reason: selectedReason,
+                        note: notes.trim() || undefined
+                    })
+                });
 
-            const data = await response.json();
+                const data = await response.json();
 
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to resolve discrepancy');
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to resolve discrepancy');
+                }
             }
 
             setSuccess(true);

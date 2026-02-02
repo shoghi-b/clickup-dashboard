@@ -20,10 +20,24 @@ export async function POST(request: Request) {
       const analyticsService = new AnalyticsService();
       await analyticsService.recalculateAllSummaries(start, end);
 
+      // Store last sync timestamp
+      const { prisma } = await import('@/lib/prisma');
+      const now = new Date();
+      await prisma.configuration.upsert({
+        where: { key: 'last_sync_clickup' },
+        update: { value: JSON.stringify(now.toISOString()) },
+        create: {
+          key: 'last_sync_clickup',
+          value: JSON.stringify(now.toISOString()),
+          description: 'Last successful ClickUp data sync timestamp'
+        }
+      });
+
       return NextResponse.json({
         success: true,
         message: `Successfully synced ${result.count} time entries`,
         count: result.count,
+        lastSync: now.toISOString()
       });
     } else {
       return NextResponse.json(

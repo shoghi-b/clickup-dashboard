@@ -70,7 +70,6 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // 4. Log the sync
         await prisma.syncLog.create({
             data: {
                 syncType: 'ATTENDANCE_API',
@@ -81,10 +80,23 @@ export async function POST(request: NextRequest) {
             }
         });
 
+        // Store last sync timestamp
+        const now = new Date();
+        await prisma.configuration.upsert({
+            where: { key: 'last_sync_attendance' },
+            update: { value: JSON.stringify(now.toISOString()) },
+            create: {
+                key: 'last_sync_attendance',
+                value: JSON.stringify(now.toISOString()),
+                description: 'Last successful attendance data sync timestamp'
+            }
+        });
+
         return NextResponse.json({
             success: true,
             count: attendanceEntries.length,
-            batchId
+            batchId,
+            lastSync: now.toISOString()
         });
 
     } catch (error) {
