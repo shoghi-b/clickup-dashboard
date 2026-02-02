@@ -18,6 +18,17 @@ export default function DataManagementPage() {
     const defaultRange: DateRange = { from: today, to: today };
     const defaultMonthRange: DateRange = { from: startOfMonth(today), to: endOfMonth(today) };
 
+    // Helper function to safely read boolean from localStorage
+    const getStoredBoolean = (key: string, defaultValue: boolean = false): boolean => {
+        if (typeof window === 'undefined') return defaultValue;
+        try {
+            const stored = localStorage.getItem(key);
+            return stored !== null ? stored === 'true' : defaultValue;
+        } catch {
+            return defaultValue;
+        }
+    };
+
     // Sync State
     const [syncing, setSyncing] = useState(false);
     const [lastSyncClickUp, setLastSyncClickUp] = useState<Date | null>(null);
@@ -38,11 +49,37 @@ export default function DataManagementPage() {
     const [syncingDevice, setSyncingDevice] = useState(false);
     const [lastSyncAttendance, setLastSyncAttendance] = useState<Date | null>(null);
 
-    // Auto-sync State
+    // Auto-sync State - Will be initialized from localStorage in useEffect
     const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
     const [nextAutoSync, setNextAutoSync] = useState<Date | null>(null);
     const [autoSyncClickUpEnabled, setAutoSyncClickUpEnabled] = useState(false);
     const [nextAutoSyncClickUp, setNextAutoSyncClickUp] = useState<Date | null>(null);
+
+    // Track if we've initialized from localStorage to prevent race condition
+    const [initialized, setInitialized] = useState(false);
+
+    // Persist auto-sync toggle states to localStorage (only after initialization)
+    useEffect(() => {
+        if (initialized && typeof window !== 'undefined') {
+            localStorage.setItem('attendance-auto-sync-enabled', String(autoSyncEnabled));
+        }
+    }, [autoSyncEnabled, initialized]);
+
+    useEffect(() => {
+        if (initialized && typeof window !== 'undefined') {
+            localStorage.setItem('clickup-auto-sync-enabled', String(autoSyncClickUpEnabled));
+        }
+    }, [autoSyncClickUpEnabled, initialized]);
+
+    // Initialize toggle states from localStorage after component mounts
+    useEffect(() => {
+        const attendanceEnabled = getStoredBoolean('attendance-auto-sync-enabled');
+        const clickupEnabled = getStoredBoolean('clickup-auto-sync-enabled');
+
+        setAutoSyncEnabled(attendanceEnabled);
+        setAutoSyncClickUpEnabled(clickupEnabled);
+        setInitialized(true);
+    }, []);
 
     // Handlers
     const handleClickUpSync = async () => {
