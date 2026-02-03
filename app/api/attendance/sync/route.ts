@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { fetchAttendanceData, processPunchData } from '@/lib/services/attendance-api';
 import { randomUUID } from 'crypto';
 
+import { addDays } from 'date-fns';
+
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
@@ -17,10 +19,13 @@ export async function POST(request: NextRequest) {
         }
 
         const start = new Date(startDate);
-        const end = new Date(endDate);
+        const end = new Date(endDate); // Proper DB end date
 
-        // 1. Fetch data from external API
-        const punchData = await fetchAttendanceData(start, end);
+        // Add 1 day ONLY for the API fetch requirement
+        const apiEnd = addDays(end, 1);
+
+        // 1. Fetch data from external API using the extended range
+        const punchData = await fetchAttendanceData(start, apiEnd);
 
         // 2. Process data into records
         const attendanceEntries = processPunchData(punchData);

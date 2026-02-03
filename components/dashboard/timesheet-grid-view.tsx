@@ -475,7 +475,11 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
                                   setAttendanceDetailsOpen(true);
                                 }}
                               >
-                                {formatHours(dayData.attendanceHours)}
+                                {dayData.attendanceHours > 0
+                                  ? formatHours(dayData.attendanceHours)
+                                  : dayData.firstIn
+                                    ? `In ${dayData.firstIn}`
+                                    : '-'}
                               </div>
                             ) : (
                               <div className="rounded px-2 py-1.5 text-xs font-medium bg-gray-50 text-gray-400">

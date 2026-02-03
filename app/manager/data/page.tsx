@@ -18,17 +18,6 @@ export default function DataManagementPage() {
     const defaultRange: DateRange = { from: today, to: today };
     const defaultMonthRange: DateRange = { from: startOfMonth(today), to: endOfMonth(today) };
 
-    // Helper function to safely read boolean from localStorage
-    const getStoredBoolean = (key: string, defaultValue: boolean = false): boolean => {
-        if (typeof window === 'undefined') return defaultValue;
-        try {
-            const stored = localStorage.getItem(key);
-            return stored !== null ? stored === 'true' : defaultValue;
-        } catch {
-            return defaultValue;
-        }
-    };
-
     // Sync State
     const [syncing, setSyncing] = useState(false);
     const [lastSyncClickUp, setLastSyncClickUp] = useState<Date | null>(null);
@@ -48,38 +37,6 @@ export default function DataManagementPage() {
     const [deviceSyncDate, setDeviceSyncDate] = useState<DateRange | undefined>(defaultRange);
     const [syncingDevice, setSyncingDevice] = useState(false);
     const [lastSyncAttendance, setLastSyncAttendance] = useState<Date | null>(null);
-
-    // Auto-sync State - Will be initialized from localStorage in useEffect
-    const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
-    const [nextAutoSync, setNextAutoSync] = useState<Date | null>(null);
-    const [autoSyncClickUpEnabled, setAutoSyncClickUpEnabled] = useState(false);
-    const [nextAutoSyncClickUp, setNextAutoSyncClickUp] = useState<Date | null>(null);
-
-    // Track if we've initialized from localStorage to prevent race condition
-    const [initialized, setInitialized] = useState(false);
-
-    // Persist auto-sync toggle states to localStorage (only after initialization)
-    useEffect(() => {
-        if (initialized && typeof window !== 'undefined') {
-            localStorage.setItem('attendance-auto-sync-enabled', String(autoSyncEnabled));
-        }
-    }, [autoSyncEnabled, initialized]);
-
-    useEffect(() => {
-        if (initialized && typeof window !== 'undefined') {
-            localStorage.setItem('clickup-auto-sync-enabled', String(autoSyncClickUpEnabled));
-        }
-    }, [autoSyncClickUpEnabled, initialized]);
-
-    // Initialize toggle states from localStorage after component mounts
-    useEffect(() => {
-        const attendanceEnabled = getStoredBoolean('attendance-auto-sync-enabled');
-        const clickupEnabled = getStoredBoolean('clickup-auto-sync-enabled');
-
-        setAutoSyncEnabled(attendanceEnabled);
-        setAutoSyncClickUpEnabled(clickupEnabled);
-        setInitialized(true);
-    }, []);
 
     // Handlers
     const handleClickUpSync = async () => {
@@ -227,117 +184,6 @@ export default function DataManagementPage() {
         fetchSyncStatus();
     }, []);
 
-    // Auto-sync functionality
-    useEffect(() => {
-        if (!autoSyncEnabled) {
-            setNextAutoSync(null);
-            return;
-        }
-
-        // Set next sync time
-        const nextSync = new Date();
-        nextSync.setHours(nextSync.getHours() + 1);
-        setNextAutoSync(nextSync);
-
-        // Auto-sync interval - runs every hour
-        const interval = setInterval(async () => {
-            console.log('Auto-sync: Fetching attendance data for today...');
-
-            const today = new Date();
-            const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-            const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-
-            try {
-                const response = await fetch('/api/attendance/sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        startDate: startOfToday.toISOString(),
-                        endDate: endOfToday.toISOString(),
-                    }),
-                });
-
-                const result = await response.json();
-                if (response.ok && result.success) {
-                    if (result.lastSync) {
-                        setLastSyncAttendance(new Date(result.lastSync));
-                    }
-                    console.log(`Auto-sync successful: ${result.count} records synced`);
-                    await refreshData();
-                }
-
-                // Update next sync time
-                const nextSync = new Date();
-                nextSync.setHours(nextSync.getHours() + 1);
-                setNextAutoSync(nextSync);
-            } catch (error) {
-                console.error('Auto-sync failed:', error);
-            }
-        }, 60 * 60 * 1000); // 1 hour in milliseconds
-
-        // Cleanup interval on unmount or when auto-sync is disabled
-        return () => clearInterval(interval);
-    }, [autoSyncEnabled, refreshData]);
-
-    // ClickUp Auto-sync functionality
-    useEffect(() => {
-        if (!autoSyncClickUpEnabled) {
-            setNextAutoSyncClickUp(null);
-            return;
-        }
-
-        // Set next sync time
-        const nextSync = new Date();
-        nextSync.setHours(nextSync.getHours() + 1);
-        setNextAutoSyncClickUp(nextSync);
-
-        // Auto-sync interval - runs every hour
-        const interval = setInterval(async () => {
-            console.log('Auto-sync ClickUp: Fetching data for today and last 2 days...');
-
-            const today = new Date();
-            const twoDaysAgo = new Date(today);
-            twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-
-            try {
-                // Sync team members first
-                const teamResponse = await fetch('/api/sync/team-members', { method: 'POST' });
-                const teamResult = await teamResponse.json();
-
-                if (teamResult.success) {
-                    // Sync time entries
-                    const timeResponse = await fetch('/api/sync/time-entries', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            startDate: twoDaysAgo.toISOString(),
-                            endDate: today.toISOString(),
-                        }),
-                    });
-
-                    const timeResult = await timeResponse.json();
-                    if (timeResult.success) {
-                        if (timeResult.lastSync) {
-                            setLastSyncClickUp(new Date(timeResult.lastSync));
-                        }
-                        console.log(`Auto-sync ClickUp successful: ${timeResult.count} entries synced`);
-                        await refreshData();
-                    }
-                }
-
-                // Update next sync time
-                const nextSync = new Date();
-                nextSync.setHours(nextSync.getHours() + 1);
-                setNextAutoSyncClickUp(nextSync);
-            } catch (error) {
-                console.error('Auto-sync ClickUp failed:', error);
-            }
-        }, 60 * 60 * 1000); // 1 hour in milliseconds
-
-        // Cleanup interval on unmount or when auto-sync is disabled
-        return () => clearInterval(interval);
-    }, [autoSyncClickUpEnabled, refreshData]);
-
     return (
         <div className="p-6 space-y-6">
             <div>
@@ -355,25 +201,9 @@ export default function DataManagementPage() {
                     <CardDescription>Fetch latest time entries and tasks from ClickUp.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                        <div className="space-y-0.5">
-                            <Label htmlFor="auto-sync-clickup" className="font-medium">Auto-Sync (Hourly)</Label>
-                            <p className="text-xs text-muted-foreground">
-                                Automatically fetch time entries for today and last 2 days
-                            </p>
-                        </div>
-                        <Switch
-                            id="auto-sync-clickup"
-                            checked={autoSyncClickUpEnabled}
-                            onCheckedChange={setAutoSyncClickUpEnabled}
-                        />
-                    </div>
-
-                    {autoSyncClickUpEnabled && nextAutoSyncClickUp && (
-                        <div className="text-xs text-muted-foreground flex items-center gap-1 px-3">
-                            <Clock className="w-3 h-3" /> Next auto-sync: {format(nextAutoSyncClickUp, 'HH:mm')}
-                        </div>
-                    )}
+                    <p className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-100 dark:border-blue-900">
+                        <span className="font-semibold">Note:</span> Automated sync runs every hour in the background. manual sync is available for immediate updates.
+                    </p>
 
                     <div className="space-y-2">
                         <Label>Select Date Range</Label>
@@ -410,25 +240,9 @@ export default function DataManagementPage() {
                         <CardDescription>Fetch punch logs directly from the biometric device API.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                            <div className="space-y-0.5">
-                                <Label htmlFor="auto-sync" className="font-medium">Auto-Sync (Hourly)</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Automatically fetch today's attendance data every hour
-                                </p>
-                            </div>
-                            <Switch
-                                id="auto-sync"
-                                checked={autoSyncEnabled}
-                                onCheckedChange={setAutoSyncEnabled}
-                            />
-                        </div>
-
-                        {autoSyncEnabled && nextAutoSync && (
-                            <div className="text-xs text-muted-foreground flex items-center gap-1 px-3">
-                                <Clock className="w-3 h-3" /> Next auto-sync: {format(nextAutoSync, 'HH:mm')}
-                            </div>
-                        )}
+                        <p className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-100 dark:border-blue-900">
+                            <span className="font-semibold">Note:</span> Automated sync runs every hour in the background.
+                        </p>
 
                         <div className="space-y-2">
                             <Label>Select Date Range</Label>
