@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Calendar, FileText, Users, Database, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Calendar, FileText, Users, Database, LogOut, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
@@ -22,6 +22,11 @@ const navItems = [
         title: 'Monthly Summary',
         href: '/manager/monthly',
         icon: FileText,
+    },
+    {
+        title: 'Reports',
+        href: '/manager/reports',
+        icon: BarChart3,
     },
     {
         title: 'Team Setup',

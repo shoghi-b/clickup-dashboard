@@ -3,7 +3,7 @@ import { SyncService } from '@/lib/services/sync-service';
 import { fetchAttendanceData, processPunchData } from '@/lib/services/attendance-api';
 import { AnalyticsService } from '@/lib/services/analytics-service';
 import { prisma } from '@/lib/prisma';
-import { addDays, startOfDay, subDays } from 'date-fns';
+import { addDays, startOfDay, endOfDay, subDays } from 'date-fns';
 import { randomUUID } from 'crypto';
 
 export const dynamic = 'force-dynamic'; // Ensure this route is not cached
