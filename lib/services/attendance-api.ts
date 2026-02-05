@@ -64,7 +64,15 @@ export async function fetchAttendanceData(startDate: Date, endDate: Date): Promi
         throw new Error(`API responded with status: ${response.status} ${response.statusText}`);
     }
 
-    const data: ApiResponse = await response.json();
+    const text = await response.text();
+    let data: ApiResponse;
+
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        console.error('Failed to parse API response:', text.substring(0, 500));
+        throw new Error(`Invalid API Response (not JSON): ${text.substring(0, 100)}...`);
+    }
 
     if (data.Error) {
         throw new Error(`API Error: ${data.Msg}`);

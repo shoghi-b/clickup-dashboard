@@ -144,7 +144,13 @@ export default function DataManagementPage() {
                 }),
             });
 
-            const result = await response.json();
+            let result;
+            try {
+                result = await response.json();
+            } catch (e) {
+                console.error('Failed to parse sync response:', e);
+                throw new Error('Server returned an invalid response (likely an error page). Check server logs.');
+            }
             if (response.ok && result.success) {
                 if (result.lastSync) {
                     setLastSyncAttendance(new Date(result.lastSync));
