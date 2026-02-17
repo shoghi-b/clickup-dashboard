@@ -58,5 +58,5 @@ If you are using Supabase, you likely already have your database schema set up. 
 
 ## Troubleshooting
 
-- **Prisma Client Issues:** If you see errors related to Prisma Client, ensure that `postinstall` script in `package.json` runs `prisma generate`. Railway usually picks this up automatically. Note that with Prisma 7, database connection configuration is handled in `prisma.config.ts`, not `schema.prisma`.
+- **Prisma Client Issues:** If you see errors related to Prisma Client, ensure that `postinstall` script in `package.json` runs `prisma generate`. Railway usually picks this up automatically. Note that with Prisma 7, database connection configuration is handled in `prisma.config.ts`, not `schema.prisma`. We have configured `prisma.config.ts` to use `DIRECT_URL` for migrations.
 - **Connection Errors:** Double-check your `DATABASE_URL` and `DIRECT_URL`. Ensure your database allows connections from external sources (0.0.0.0/0).
