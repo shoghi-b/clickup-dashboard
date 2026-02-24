@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
-import { ProjectBreakdownSheet } from './project-breakdown-sheet';
-import { AttendanceDetailsSheet } from './attendance-details-sheet';
+import { DayCellModal } from './day-cell-modal';
 
 // ─── Data interfaces ──────────────────────────────────────────────────────────
 
@@ -111,11 +110,10 @@ interface DayCellProps {
   dayData: DayData;
   isWeekend: boolean;
   isPresent: boolean;
-  onClickupClick: () => void;
-  onAttendanceClick: () => void;
+  onClick: () => void;
 }
 
-function DayCell({ dayData, isWeekend, isPresent, onClickupClick, onAttendanceClick }: DayCellProps) {
+function DayCell({ dayData, isWeekend, isPresent, onClick }: DayCellProps) {
   const cu = dayData.clickupHours;
   const att = dayData.attendanceHours;
   const delta = cu - att;
@@ -123,19 +121,18 @@ function DayCell({ dayData, isWeekend, isPresent, onClickupClick, onAttendanceCl
   const cuFill = Math.min(100, (cu / MAX_HOURS) * 100);
   const attFill = Math.min(100, (att / MAX_HOURS) * 100);
 
-  const hasData = cu > 0 || att > 0;
+  const hasData = cu > 0 || att > 0 || isPresent;
 
   return (
     <td
-      className={`py-2.5 px-2 border-r last:border-r-0 align-top ${isWeekend ? 'bg-gray-50/60' : ''}`}
+      className={`py-2.5 px-2 border-r last:border-r-0 align-top transition-colors ${isWeekend ? 'bg-gray-50/60' : ''
+        } hover:bg-[#f0f4ff] cursor-pointer`}
       style={{ minWidth: 130 }}
+      onClick={onClick}
     >
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 pointer-events-none">
         {/* ── ClickUp bar row ── */}
-        <div
-          className={`flex items-center gap-2 ${cu > 0 ? 'cursor-pointer' : ''}`}
-          onClick={cu > 0 ? onClickupClick : undefined}
-        >
+        <div className="flex items-center gap-2">
           <div className="h-[7px] flex-1 rounded-full bg-indigo-100 overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all"
@@ -148,10 +145,7 @@ function DayCell({ dayData, isWeekend, isPresent, onClickupClick, onAttendanceCl
         </div>
 
         {/* ── Attendance bar row ── */}
-        <div
-          className={`flex items-center gap-2 ${att > 0 ? 'cursor-pointer' : ''}`}
-          onClick={att > 0 ? onAttendanceClick : undefined}
-        >
+        <div className="flex items-center gap-2">
           <div className="h-[7px] flex-1 rounded-full bg-sky-100 overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-sky-500 to-sky-400 transition-all"
@@ -184,16 +178,10 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
   const [loading, setLoading] = useState(true);
   const [weekDays, setWeekDays] = useState<Date[]>([]);
 
-  // Sheets
-  const [projectBreakdownOpen, setProjectBreakdownOpen] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<{ id: string; name: string } | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedDateRange, setSelectedDateRange] = useState<{ start: Date; end: Date } | null>(null);
-
-  const [attendanceDetailsOpen, setAttendanceDetailsOpen] = useState(false);
-  const [selectedAttendanceMember, setSelectedAttendanceMember] = useState<string>('');
-  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState<Date | null>(null);
-  const [selectedAttendanceData, setSelectedAttendanceData] = useState<DayData | null>(null);
+  const [dayCellModalOpen, setDayCellModalOpen] = useState(false);
+  const [selectedDayMember, setSelectedDayMember] = useState<{ id: string; name: string } | null>(null);
+  const [selectedDayDate, setSelectedDayDate] = useState<Date | null>(null);
+  const [selectedDayData, setSelectedDayData] = useState<DayData | null>(null);
 
   useEffect(() => {
     const start = startOfWeek(dateRange.from, { weekStartsOn: 1 });
@@ -504,18 +492,11 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
                               dayData={dayData}
                               isWeekend={isWeekend}
                               isPresent={isPresent}
-                              onClickupClick={() => {
-                                if (dayData.clickupHours === 0) return;
-                                setSelectedMember({ id: row.member.id, name: row.member.username });
-                                setSelectedDate(day);
-                                setSelectedDateRange(null);
-                                setProjectBreakdownOpen(true);
-                              }}
-                              onAttendanceClick={() => {
-                                setSelectedAttendanceMember(row.member.username);
-                                setSelectedAttendanceDate(day);
-                                setSelectedAttendanceData(dayData);
-                                setAttendanceDetailsOpen(true);
+                              onClick={() => {
+                                setSelectedDayMember({ id: row.member.id, name: row.member.username });
+                                setSelectedDayDate(day);
+                                setSelectedDayData(dayData);
+                                setDayCellModalOpen(true);
                               }}
                             />
                           );
@@ -626,36 +607,14 @@ export function TimesheetGridView({ dateRange, selectedMembers }: TimesheetGridV
         </CardContent>
       </Card>
 
-      {/* ── Project Breakdown Sheet ── */}
-      <ProjectBreakdownSheet
-        open={projectBreakdownOpen}
-        onOpenChange={setProjectBreakdownOpen}
-        teamMemberId={selectedMember?.id || null}
-        memberName={selectedMember?.name || ''}
-        date={selectedDate}
-        startDate={selectedDateRange?.start || null}
-        endDate={selectedDateRange?.end || null}
-      />
-
-      {/* ── Attendance Details Sheet ── */}
-      <AttendanceDetailsSheet
-        open={attendanceDetailsOpen}
-        onOpenChange={setAttendanceDetailsOpen}
-        memberName={selectedAttendanceMember}
-        date={selectedAttendanceDate}
-        data={
-          selectedAttendanceData
-            ? {
-              inOutPeriods: selectedAttendanceData.inOutPeriods,
-              unpairedIns: selectedAttendanceData.unpairedIns,
-              unpairedOuts: selectedAttendanceData.unpairedOuts,
-              firstIn: selectedAttendanceData.firstIn,
-              lastOut: selectedAttendanceData.lastOut,
-              totalHours: selectedAttendanceData.attendanceHours,
-              status: selectedAttendanceData.attendanceStatus || 'ABSENT',
-            }
-            : null
-        }
+      {/* ── Day Cell Modal ── */}
+      <DayCellModal
+        open={dayCellModalOpen}
+        onOpenChange={setDayCellModalOpen}
+        dayData={selectedDayData}
+        memberId={selectedDayMember?.id || null}
+        memberName={selectedDayMember?.name || ''}
+        date={selectedDayDate}
       />
     </>
   );

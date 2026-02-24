@@ -5,7 +5,6 @@ import { useDashboard } from '../dashboard-context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { ResetDataButton } from '@/components/dashboard/reset-data-button';
 import { RefreshCw, Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { CustomDateRangePicker, DateRange } from '@/components/ui/custom-date-range-picker';
@@ -18,7 +17,7 @@ export default function DataManagementPage() {
     const defaultRange: DateRange = { from: today, to: today };
     const defaultMonthRange: DateRange = { from: startOfMonth(today), to: endOfMonth(today) };
 
-    // Sync State
+    // ClickUp Sync State
     const [syncing, setSyncing] = useState(false);
     const [lastSyncClickUp, setLastSyncClickUp] = useState<Date | null>(null);
     const [syncDateRange, setSyncDateRange] = useState<DateRange | undefined>(defaultRange);
@@ -38,6 +37,9 @@ export default function DataManagementPage() {
     const [syncingDevice, setSyncingDevice] = useState(false);
     const [lastSyncAttendance, setLastSyncAttendance] = useState<Date | null>(null);
 
+    // Tab state inside Attendance card: 'device' | 'upload'
+    const [attendanceTab, setAttendanceTab] = useState<'device' | 'upload'>('device');
+
     // Handlers
     const handleClickUpSync = async () => {
         if (!syncDateRange?.from || !syncDateRange?.to) {
@@ -46,12 +48,10 @@ export default function DataManagementPage() {
         }
         setSyncing(true);
         try {
-            // Sync team members first
             const teamResponse = await fetch('/api/sync/team-members', { method: 'POST' });
             const teamResult = await teamResponse.json();
             if (!teamResult.success) throw new Error(teamResult.error);
 
-            // Sync time entries
             const timeResponse = await fetch('/api/sync/time-entries', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -148,9 +148,9 @@ export default function DataManagementPage() {
             try {
                 result = await response.json();
             } catch (e) {
-                console.error('Failed to parse sync response:', e);
-                throw new Error('Server returned an invalid response (likely an error page). Check server logs.');
+                throw new Error('Server returned an invalid response. Check server logs.');
             }
+
             if (response.ok && result.success) {
                 if (result.lastSync) {
                     setLastSyncAttendance(new Date(result.lastSync));
@@ -167,26 +167,20 @@ export default function DataManagementPage() {
         }
     };
 
-    // Fetch initial sync timestamps
+    // Fetch initial sync timestamps on mount
     useEffect(() => {
         const fetchSyncStatus = async () => {
             try {
                 const response = await fetch('/api/sync/status');
                 const result = await response.json();
-
                 if (result.success) {
-                    if (result.lastSyncClickUp) {
-                        setLastSyncClickUp(new Date(result.lastSyncClickUp));
-                    }
-                    if (result.lastSyncAttendance) {
-                        setLastSyncAttendance(new Date(result.lastSyncAttendance));
-                    }
+                    if (result.lastSyncClickUp) setLastSyncClickUp(new Date(result.lastSyncClickUp));
+                    if (result.lastSyncAttendance) setLastSyncAttendance(new Date(result.lastSyncAttendance));
                 }
             } catch (error) {
                 console.error('Error fetching sync status:', error);
             }
         };
-
         fetchSyncStatus();
     }, []);
 
@@ -197,152 +191,174 @@ export default function DataManagementPage() {
                 <p className="text-muted-foreground">Sync data, upload attendance, and manage system.</p>
             </div>
 
-            {/* Row 1: ClickUp Sync (Full Width) */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <RefreshCw className="w-5 h-5 text-blue-600" />
-                        ClickUp Data Sync
-                    </CardTitle>
-                    <CardDescription>Fetch latest time entries and tasks from ClickUp.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <p className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-100 dark:border-blue-900">
-                        <span className="font-semibold">Note:</span> Automated sync runs every hour in the background. manual sync is available for immediate updates.
-                    </p>
+            {/* Row 1: ClickUp + Attendance side by side */}
+            <div className="grid gap-6 md:grid-cols-2 items-start">
 
-                    <div className="space-y-2">
-                        <Label>Select Date Range</Label>
-                        <CustomDateRangePicker
-                            value={syncDateRange || defaultRange}
-                            onChange={setSyncDateRange}
-                        />
-                    </div>
-                    <Button
-                        onClick={handleClickUpSync}
-                        disabled={syncing || !syncDateRange?.from}
-                        className="w-full"
-                    >
-                        {syncing ? 'Syncing...' : 'Sync ClickUp Data'}
-                    </Button>
-                    {lastSyncClickUp && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="w-3 h-3" /> Last sync: {format(lastSyncClickUp, 'MMM dd, HH:mm')}
-                        </p>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Row 2: Attendance Operations (Side by Side) */}
-            <div className="grid gap-6 md:grid-cols-2">
-
-                {/* Attendance Device Sync Card */}
+                {/* ClickUp Data Sync */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <RefreshCw className="w-5 h-5 text-green-600" />
-                            Attendance Device Sync
+                            <RefreshCw className="w-5 h-5 text-blue-600" />
+                            ClickUp Data Sync
                         </CardTitle>
-                        <CardDescription>Fetch punch logs directly from the biometric device API.</CardDescription>
+                        <CardDescription>Fetch latest time entries and tasks from ClickUp.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <p className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-100 dark:border-blue-900">
-                            <span className="font-semibold">Note:</span> Automated sync runs every hour in the background.
+                            <span className="font-semibold">Note:</span> Automated sync runs every hour. Manual sync is available for immediate updates.
                         </p>
-
                         <div className="space-y-2">
                             <Label>Select Date Range</Label>
                             <CustomDateRangePicker
-                                value={deviceSyncDate || defaultRange}
-                                onChange={setDeviceSyncDate}
+                                value={syncDateRange || defaultRange}
+                                onChange={setSyncDateRange}
                             />
                         </div>
                         <Button
-                            onClick={handleDeviceSync}
-                            disabled={syncingDevice || !deviceSyncDate?.from}
-                            className="w-full bg-green-600 hover:bg-green-700"
+                            onClick={handleClickUpSync}
+                            disabled={syncing || !syncDateRange?.from}
+                            className="w-full"
                         >
-                            {syncingDevice ? 'Syncing...' : 'Sync From Device'}
+                            {syncing ? 'Syncing...' : 'Sync ClickUp Data'}
                         </Button>
-
-                        {lastSyncAttendance && (
+                        {lastSyncClickUp && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> Last sync: {format(lastSyncAttendance, 'MMM dd, HH:mm')}
+                                <Clock className="w-3 h-3" /> Last sync: {format(lastSyncClickUp, 'MMM dd, HH:mm')}
                             </p>
                         )}
                     </CardContent>
                 </Card>
 
-                {/* Upload Attendance File Card */}
+                {/* Attendance Card with Device / Upload tabs */}
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Upload className="w-5 h-5 text-purple-600" />
-                            Upload Attendance File
-                        </CardTitle>
-                        <CardDescription>Upload XLS/XLSX export from the attendance machine.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Attendance File</Label>
-                            <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 hover:border-gray-400 transition-colors">
-                                <input
-                                    id="attendance-file-input"
-                                    type="file"
-                                    accept=".xls,.xlsx"
-                                    onChange={handleAttendanceFileChange}
-                                    className="hidden"
-                                />
-                                <label
-                                    htmlFor="attendance-file-input"
-                                    className="flex flex-col items-center justify-center cursor-pointer"
+                        <div className="flex items-start justify-between gap-2">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <RefreshCw className="w-5 h-5 text-green-600" />
+                                    Attendance Sync
+                                </CardTitle>
+                                <CardDescription>Fetch punch logs or upload a file manually.</CardDescription>
+                            </div>
+                            {/* Pill tab toggle */}
+                            <div className="flex items-center bg-muted rounded-lg p-1 gap-1 text-sm shrink-0">
+                                <button
+                                    onClick={() => { setAttendanceTab('device'); setUploadResult(null); }}
+                                    className={`px-3 py-1 rounded-md font-medium transition-colors ${attendanceTab === 'device'
+                                        ? 'bg-background shadow text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                        }`}
                                 >
-                                    <FileSpreadsheet className="w-8 h-8 text-gray-400 mb-2" />
-                                    <span className="text-sm font-medium">
-                                        {attendanceFile ? attendanceFile.name : 'Click to upload'}
-                                    </span>
-                                </label>
+                                    Device
+                                </button>
+                                <button
+                                    onClick={() => setAttendanceTab('upload')}
+                                    className={`px-3 py-1 rounded-md font-medium transition-colors flex items-center gap-1 ${attendanceTab === 'upload'
+                                        ? 'bg-background shadow text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                        }`}
+                                >
+                                    <Upload className="w-3 h-3" />
+                                    Upload
+                                </button>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Date Range to Process</Label>
-                            <CustomDateRangePicker
-                                value={attendanceDateRange || defaultMonthRange}
-                                onChange={setAttendanceDateRange}
-                            />
-                        </div>
-                        <Button
-                            onClick={handleAttendanceUpload}
-                            disabled={!attendanceFile || uploadingAttendance}
-                            className="w-full"
-                        >
-                            {uploadingAttendance ? 'Uploading...' : 'Upload & Process'}
-                        </Button>
+                    </CardHeader>
 
-                        {/* Results */}
-                        {uploadResult && (
-                            <div className={`rounded-lg p-4 border ${uploadResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                                <div className="flex items-start gap-3">
-                                    {uploadResult.success ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-red-600" />}
-                                    <div>
-                                        <p className={`text-sm font-medium ${uploadResult.success ? 'text-green-900' : 'text-red-900'}`}>
-                                            {uploadResult.message}
-                                        </p>
-                                        {uploadResult.summary && (
-                                            <div className="mt-2 text-xs text-green-800 space-y-1">
-                                                <p>Records: {uploadResult.summary.totalRecords}</p>
-                                                <p>Present: {uploadResult.summary.presentCount}</p>
-                                            </div>
-                                        )}
+                    <CardContent className="space-y-4">
+                        {attendanceTab === 'device' ? (
+                            <>
+                                <p className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-100 dark:border-blue-900">
+                                    <span className="font-semibold">Note:</span> Automated sync runs every hour in the background.
+                                </p>
+                                <div className="space-y-2">
+                                    <Label>Select Date Range</Label>
+                                    <CustomDateRangePicker
+                                        value={deviceSyncDate || defaultRange}
+                                        onChange={setDeviceSyncDate}
+                                    />
+                                </div>
+                                <Button
+                                    onClick={handleDeviceSync}
+                                    disabled={syncingDevice || !deviceSyncDate?.from}
+                                    className="w-full bg-green-600 hover:bg-green-700"
+                                >
+                                    {syncingDevice ? 'Syncing...' : 'Sync From Device'}
+                                </Button>
+                                {lastSyncAttendance && (
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> Last sync: {format(lastSyncAttendance, 'MMM dd, HH:mm')}
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-sm text-muted-foreground bg-amber-50 dark:bg-amber-950 p-3 rounded-lg border border-amber-100 dark:border-amber-900">
+                                    <span className="font-semibold">Manual upload:</span> Use only when the device API is unavailable. Upload an XLS/XLSX export from the attendance machine.
+                                </p>
+                                <div className="space-y-2">
+                                    <Label>Attendance File</Label>
+                                    <div className="border-2 border-dashed border-gray-200 rounded-lg p-5 hover:border-gray-400 transition-colors">
+                                        <input
+                                            id="attendance-file-input"
+                                            type="file"
+                                            accept=".xls,.xlsx"
+                                            onChange={handleAttendanceFileChange}
+                                            className="hidden"
+                                        />
+                                        <label
+                                            htmlFor="attendance-file-input"
+                                            className="flex flex-col items-center justify-center cursor-pointer"
+                                        >
+                                            <FileSpreadsheet className="w-7 h-7 text-gray-400 mb-1" />
+                                            <span className="text-sm font-medium">
+                                                {attendanceFile ? attendanceFile.name : 'Click to upload'}
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
-                            </div>
+                                <div className="space-y-2">
+                                    <Label>Date Range to Process</Label>
+                                    <CustomDateRangePicker
+                                        value={attendanceDateRange || defaultMonthRange}
+                                        onChange={setAttendanceDateRange}
+                                    />
+                                </div>
+                                <Button
+                                    onClick={handleAttendanceUpload}
+                                    disabled={!attendanceFile || uploadingAttendance}
+                                    className="w-full"
+                                >
+                                    {uploadingAttendance ? 'Uploading...' : 'Upload & Process'}
+                                </Button>
+                                {uploadResult && (
+                                    <div className={`rounded-lg p-4 border ${uploadResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                        <div className="flex items-start gap-3">
+                                            {uploadResult.success
+                                                ? <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                                : <XCircle className="w-5 h-5 text-red-600" />
+                                            }
+                                            <div>
+                                                <p className={`text-sm font-medium ${uploadResult.success ? 'text-green-900' : 'text-red-900'}`}>
+                                                    {uploadResult.message}
+                                                </p>
+                                                {uploadResult.summary && (
+                                                    <div className="mt-2 text-xs text-green-800 space-y-1">
+                                                        <p>Records: {uploadResult.summary.totalRecords}</p>
+                                                        <p>Present: {uploadResult.summary.presentCount}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Row 3: Danger Zone (Full Width) */}
+            {/* Row 2: Danger Zone (full width) */}
             <Card className="border-red-200 bg-red-50">
                 <CardHeader>
                     <CardTitle className="text-red-700">Danger Zone</CardTitle>
