@@ -29,7 +29,10 @@ interface DateRange {
 const STORAGE_KEY = 'compliance_selected_members';
 
 export default function ReportsPage() {
-    const { teamMembers } = useDashboard();
+    const { teamMembers, visibleMembers } = useDashboard();
+
+    // Only show master-visible members in the report selectors
+    const visibleTeamMembers = teamMembers.filter(m => visibleMembers.includes(m.id));
     const [selectedPeriod, setSelectedPeriod] = useState<ReportPeriod>('7_DAYS');
     const [dateRange, setDateRange] = useState<DateRange | null>(null);
     const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
@@ -45,21 +48,27 @@ export default function ReportsPage() {
     } | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
 
-    // Load persisted selection
+    // Load persisted selection, filtered to only master-visible members
     useEffect(() => {
+        if (visibleMembers.length === 0) return; // wait until visibleMembers is loaded
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed)) {
-                    setSelectedMembers(parsed);
+                    // Filter out any members no longer in the master-visible list
+                    const filtered = parsed.filter((id: string) => visibleMembers.includes(id));
+                    setSelectedMembers(filtered);
                 }
             } catch (e) {
                 console.error('Failed to load compliance members', e);
             }
+        } else {
+            // No saved selection — seed from master-visible members
+            setSelectedMembers(visibleMembers);
         }
         setIsInitialized(true);
-    }, []);
+    }, [visibleMembers]);
 
     const handleSelectionChange = (ids: string[]) => {
         setSelectedMembers(ids);
@@ -188,7 +197,7 @@ export default function ReportsPage() {
                                 <div className="flex-1 min-w-[200px]">
                                     <label className="text-sm font-medium text-gray-700 mb-2 block">Team Members</label>
                                     <MemberSelector
-                                        members={teamMembers}
+                                        members={visibleTeamMembers}
                                         selectedMemberIds={selectedMembers}
                                         onSelectionChange={handleSelectionChange}
                                         placeholder="Select members for report"
@@ -540,7 +549,7 @@ export default function ReportsPage() {
 
                 <TabsContent value="trends">
                     <TrendAnalysisView
-                        teamMembers={teamMembers}
+                        teamMembers={visibleTeamMembers}
                     />
                 </TabsContent>
             </Tabs>

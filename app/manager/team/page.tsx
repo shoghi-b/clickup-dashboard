@@ -5,39 +5,42 @@ import { TeamOverview } from '@/components/dashboard/team-overview';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 export default function TeamSetupPage() {
-    const { teamMembers, refreshData, selectedMembers, setSelectedMembers } = useDashboard();
+    const { teamMembers, refreshData, visibleMembers, setVisibleMembers } = useDashboard();
 
     const handleToggleMember = (memberId: string) => {
-        if (selectedMembers.includes(memberId)) {
-            setSelectedMembers(selectedMembers.filter(id => id !== memberId));
+        if (visibleMembers.includes(memberId)) {
+            setVisibleMembers(visibleMembers.filter(id => id !== memberId));
         } else {
-            setSelectedMembers([...selectedMembers, memberId]);
+            setVisibleMembers([...visibleMembers, memberId]);
         }
     };
 
     const handleSelectAll = () => {
-        setSelectedMembers(teamMembers.map(m => m.id));
+        setVisibleMembers(teamMembers.map(m => m.id));
     };
 
     const handleDeselectAll = () => {
-        setSelectedMembers([]);
+        setVisibleMembers([]);
     };
 
     return (
         <div className="p-6 space-y-6">
             <div>
                 <h2 className="text-3xl font-bold tracking-tight">Team Setup</h2>
-                <p className="text-muted-foreground">Manage members and access. Toggle members ON/OFF to control data loading.</p>
+                <p className="text-muted-foreground">
+                    Control which members appear across Weekly Logs, Reports, and all views.
+                    This is a one-time master setup — your selection persists every time the app is opened.
+                </p>
             </div>
 
             <div className="grid gap-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Team Members</CardTitle>
+                        <CardTitle>Member Visibility</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <TeamOverview
-                            selectedMembers={selectedMembers}
+                            visibleMembers={visibleMembers}
                             onToggleMember={handleToggleMember}
                             onSelectAll={handleSelectAll}
                             onDeselectAll={handleDeselectAll}

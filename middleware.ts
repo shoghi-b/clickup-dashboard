@@ -5,9 +5,10 @@ export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('session');
   const isLoginPage = request.nextUrl.pathname === '/login';
   const isApiAuthRoute = request.nextUrl.pathname.startsWith('/api/auth');
+  const isApiCronRoute = request.nextUrl.pathname.startsWith('/api/cron');
 
-  // Allow access to login page and auth API routes
-  if (isLoginPage || isApiAuthRoute) {
+  // Allow access to login page, auth API routes, and cron routes (secured by CRON_SECRET)
+  if (isLoginPage || isApiAuthRoute || isApiCronRoute) {
     return NextResponse.next();
   }
 

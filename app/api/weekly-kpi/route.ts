@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { riskSignalsService } from '@/lib/services/risk-signals-service';
-import { startOfWeek, endOfWeek, format, eachDayOfInterval, isWeekend } from 'date-fns';
+import { startOfWeek, endOfWeek, format, eachDayOfInterval, isWeekend, isAfter, startOfDay } from 'date-fns';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
     const targetDate = date ? new Date(date) : new Date();
     const weekStart = startOfWeek(targetDate, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(targetDate, { weekStartsOn: 1 });
+
+    // Cap to today so mid-week KPIs only reflect elapsed days
+    const today = startOfDay(new Date());
+    const effectiveEnd = isAfter(weekEnd, today) ? today : weekEnd;
 
     // Parse member IDs filter
     const memberIds = memberIdsParam ? memberIdsParam.split(',').filter(Boolean) : [];
@@ -42,18 +46,24 @@ export async function GET(request: NextRequest) {
         },
         ...(memberIds.length > 0
           ? {
-              employeeName: {
-                in: teamMembers.map((m: { username: string }) => m.username),
-              },
-            }
+            employeeName: {
+              in: teamMembers.map((m: { username: string }) => m.username),
+            },
+          }
           : {}),
       },
     });
 
     // Calculate KPIs
-    const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd }).filter(
+    // Use effectiveEnd so we only count weekdays that have actually happened
+    const weekDays = eachDayOfInterval({ start: weekStart, end: effectiveEnd }).filter(
       (day) => !isWeekend(day)
     );
+    const elapsedDayCount = weekDays.length; // 0-5, based on how far through the week we are
+
+    // Compliance threshold: proportional to elapsed days, but never require more than 4
+    // e.g. Monday → 1 elapsed day → threshold = 1; by Thursday → 4 elapsed → threshold = 4
+    const complianceThreshold = Math.min(4, elapsedDayCount);
 
     let totalAttendanceCompliance = 0;
     let totalTimesheetCompliance = 0;
@@ -104,11 +114,13 @@ export async function GET(request: NextRequest) {
       const presentDays = dailyData.filter((d) => d.isPresent).length;
       const loggedDays = dailyData.filter((d) => d.clickup >= 4).length;
       const totalClickUpHours = dailyData.reduce((sum, d) => sum + d.clickup, 0);
-      const expectedHours = (member.expectedHoursPerDay || 8) * weekDays.length;
+      // Use elapsed days as denominator so utilization isn't deflated mid-week
+      const expectedHours = (member.expectedHoursPerDay || 8) * elapsedDayCount;
       const utilization = expectedHours > 0 ? (totalClickUpHours / expectedHours) * 100 : 0;
 
-      const attendanceCompliance = presentDays >= 4;
-      const timesheetCompliance = loggedDays >= 4;
+      // Compliance uses proportional threshold (not a hard ≥4 mid-week)
+      const attendanceCompliance = elapsedDayCount === 0 ? true : presentDays >= complianceThreshold;
+      const timesheetCompliance = elapsedDayCount === 0 ? true : loggedDays >= complianceThreshold;
       const hasPresentNotLogged = dailyData.some((d) => d.isPresent && d.clickup < 1);
 
       if (attendanceCompliance) totalAttendanceCompliance++;
@@ -148,9 +160,8 @@ export async function GET(request: NextRequest) {
       const topSignal = riskSignalSummary[0];
       insights = {
         title: `This week: ${topSignal.affectedMemberCount} ${topSignal.description}`,
-        description: `${topSignal.title} detected. ${
-          topSignal.severity === 'HIGH' ? 'Immediate' : 'Prompt'
-        } attention required. Review affected members for 1:1 sessions.`,
+        description: `${topSignal.title} detected. ${topSignal.severity === 'HIGH' ? 'Immediate' : 'Prompt'
+          } attention required. Review affected members for 1:1 sessions.`,
       };
     }
 

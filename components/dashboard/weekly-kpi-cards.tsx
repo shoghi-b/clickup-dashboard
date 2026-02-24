@@ -1,67 +1,77 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { useMemo } from 'react';
+import { AlertTriangle, Clock, TrendingDown, CalendarCheck, Target, Activity } from 'lucide-react';
 
-interface KPICardProps {
-  title: string;
-  value: string | number;
-  subtitle: string;
-  trend?: 'up' | 'down' | 'neutral';
-  trendValue?: string;
-  status: 'good' | 'warning' | 'critical';
-  onClick?: () => void;
-  context?: string;
+interface MemberDay {
+  date: string;
+  attendance: number;
+  clickup: number;
+  isPresent: boolean;
+  status: string;
 }
 
-function KPICard({ title, value, subtitle, trend, trendValue, status, onClick, context }: KPICardProps) {
-  const statusColors = {
-    good: 'border-green-200 hover:border-green-400 bg-green-50/30',
-    warning: 'border-yellow-200 hover:border-yellow-400 bg-yellow-50/30',
-    critical: 'border-red-200 hover:border-red-400 bg-red-50/30',
-  };
+interface Member {
+  id: string;
+  name: string;
+  days: MemberDay[];
+  total: number;
+  utilization: number;
+  attendanceCompliance: boolean;
+  timesheetCompliance: boolean;
+}
 
-  const valueColors = {
-    good: 'text-green-600',
-    warning: 'text-yellow-600',
-    critical: 'text-red-600',
-  };
+type Severity = 'good' | 'warn' | 'critical' | 'neutral';
 
-  const trendIcons = {
-    up: <TrendingUp className="h-4 w-4 text-green-600" />,
-    down: <TrendingDown className="h-4 w-4 text-red-600" />,
-    neutral: <Minus className="h-4 w-4 text-gray-400" />,
+interface KPICardProps {
+  label: string;
+  value: string;
+  subtitle: string;
+  detail?: string;
+  severity: Severity;
+  icon: React.ReactNode;
+  onClick?: () => void;
+}
+
+function formatHours(hours: number): string {
+  if (hours <= 0) return '0m';
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function KPICard({ label, value, subtitle, detail, severity, icon, onClick }: KPICardProps) {
+  const palette: Record<Severity, { wrap: string; val: string; lbl: string }> = {
+    good: { wrap: 'border-emerald-100 bg-emerald-50/40', val: 'text-emerald-600', lbl: 'text-emerald-700' },
+    warn: { wrap: 'border-amber-100  bg-amber-50/40', val: 'text-amber-600', lbl: 'text-amber-700' },
+    critical: { wrap: 'border-red-100    bg-red-50/40', val: 'text-red-600', lbl: 'text-red-700' },
+    neutral: { wrap: 'border-gray-100   bg-gray-50/30', val: 'text-gray-800', lbl: 'text-gray-500' },
   };
+  const c = palette[severity];
 
   return (
-    <Card
-      className={`cursor-pointer transition-all duration-200 ${statusColors[status]} ${onClick ? 'hover:shadow-lg' : ''
-        }`}
+    <div
+      className={`rounded-xl border ${c.wrap} p-4 flex flex-col gap-1 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
       onClick={onClick}
     >
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-baseline justify-between">
-          <div className={`text-3xl font-bold ${valueColors[status]}`}>{value}</div>
-          {trend && trendValue && (
-            <div className="flex items-center gap-1 text-sm">
-              {trendIcons[trend]}
-              <span className="text-gray-600">{trendValue}</span>
-            </div>
-          )}
+      <div className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${c.lbl}`}>
+        {icon}
+        {label}
+      </div>
+      <div className={`text-2xl font-bold tracking-tight ${c.val}`}>{value}</div>
+      <div className="text-xs text-gray-500 leading-snug">{subtitle}</div>
+      {detail && (
+        <div className="text-xs text-gray-400 leading-snug mt-0.5 truncate" title={detail}>
+          {detail}
         </div>
-        <p className="text-xs text-gray-500 mt-2">{subtitle}</p>
-        {context && (
-          <p className="text-xs text-gray-400 mt-1 italic">{context}</p>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
 
-interface WeeklyKPICardsProps {
+export interface WeeklyKPICardsProps {
   kpiData: {
     attendanceCompliance: number;
     timesheetCompliance: number;
@@ -70,120 +80,149 @@ interface WeeklyKPICardsProps {
     overCapacity: number;
     underCapacity: number;
   };
+  members?: Member[];
+  weekDayCount?: number;
   onCardClick: (metric: string) => void;
 }
 
-export function WeeklyKPICards({ kpiData, onCardClick }: WeeklyKPICardsProps) {
-  const getComplianceStatus = (rate: number): 'good' | 'warning' | 'critical' => {
-    if (rate >= 80) return 'good';
-    if (rate >= 60) return 'warning';
-    return 'critical';
-  };
+export function WeeklyKPICards({ kpiData, members = [], weekDayCount = 5, onCardClick }: WeeklyKPICardsProps) {
+  const kpis = useMemo(() => {
+    let totalClickup = 0;
+    let totalAttendance = 0;
+    let zeroLogDays = 0;
+    const highDivNames: string[] = [];
+    const streakRiskNames: string[] = [];
+    const daysWithData = new Set<string>();
 
-  const getUtilizationStatus = (util: number): 'good' | 'warning' | 'critical' => {
-    if (util >= 70 && util <= 85) return 'good';
-    if (util >= 60 && util < 90) return 'warning';
-    return 'critical';
-  };
+    members.forEach((m) => {
+      let mClickup = 0;
+      let mAttendance = 0;
+      let hasHighDiv = false;
+      let hasStreakRisk = false;
 
-  const getCountStatus = (count: number): 'good' | 'warning' | 'critical' => {
-    if (count === 0) return 'good';
-    if (count <= 2) return 'warning';
-    return 'critical';
-  };
+      m.days.forEach((d) => {
+        mClickup += d.clickup;
+        mAttendance += d.attendance;
+
+        if (d.clickup > 0 || d.attendance > 0) daysWithData.add(d.date);
+        if (d.isPresent && d.clickup === 0) zeroLogDays++;
+
+        // High divergence: present and the gap between attendance and clickup > 2h
+        if (d.isPresent && d.attendance > 0 && (d.attendance - d.clickup) > 2) {
+          hasHighDiv = true;
+        }
+        // Streak risk: present but less than 1h ClickUp logged
+        if (d.isPresent && d.clickup < 1) hasStreakRisk = true;
+      });
+
+      totalClickup += mClickup;
+      totalAttendance += mAttendance;
+      if (hasHighDiv) highDivNames.push(m.name);
+      if (hasStreakRisk) streakRiskNames.push(m.name);
+    });
+
+    const loggingAccuracy = totalAttendance > 0
+      ? Math.round((totalClickup / totalAttendance) * 100)
+      : 0;
+    const unaccountedHours = Math.max(0, totalAttendance - totalClickup);
+    const weekCoverage = weekDayCount > 0
+      ? Math.min(100, Math.round((daysWithData.size / weekDayCount) * 100))
+      : 0;
+
+    return {
+      loggingAccuracy,
+      unaccountedHours,
+      highDivCount: highDivNames.length,
+      highDivNames,
+      streakRiskCount: streakRiskNames.length,
+      streakRiskNames,
+      zeroLogDays,
+      weekCoverage,
+      daysLoaded: daysWithData.size,
+    };
+  }, [members, weekDayCount]);
+
+  const nameList = (names: string[]) =>
+    names.length === 0
+      ? undefined
+      : names.slice(0, 4).join(', ') + (names.length > 4 ? ` +${names.length - 4}` : '');
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      {/* 1 — Logging Accuracy */}
       <KPICard
-        title="Attendance Compliance"
-        value={`${kpiData.attendanceCompliance}%`}
-        subtitle={
-          kpiData.attendanceCompliance >= 80
-            ? '✓ Team is showing up'
-            : '⚠ Attendance problem'
+        label="Logging Accuracy"
+        value={`${kpis.loggingAccuracy}%`}
+        subtitle="ClickUp ÷ Attendance hours"
+        detail={
+          kpis.loggingAccuracy < 60
+            ? 'Project cost data at risk'
+            : kpis.loggingAccuracy < 80
+              ? 'Partially trustworthy'
+              : 'Data looks reliable'
         }
-        context="% of team members present ≥4 days/week"
-        status={getComplianceStatus(kpiData.attendanceCompliance)}
-        trend={kpiData.attendanceCompliance >= 80 ? 'up' : 'down'}
-        trendValue="vs last week"
-        onClick={() => onCardClick('attendanceCompliance')}
+        severity={kpis.loggingAccuracy >= 80 ? 'good' : kpis.loggingAccuracy >= 60 ? 'warn' : 'critical'}
+        icon={<Target className="h-3 w-3" />}
+        onClick={() => onCardClick('loggingAccuracy')}
       />
 
+      {/* 2 — Unaccounted Hours */}
       <KPICard
-        title="Timesheet Compliance"
-        value={`${kpiData.timesheetCompliance}%`}
-        subtitle={
-          kpiData.timesheetCompliance >= 80
-            ? '✓ Good logging discipline'
-            : '⚠ Data cannot be trusted'
-        }
-        context="% of team logging ≥4 days/week"
-        status={getComplianceStatus(kpiData.timesheetCompliance)}
-        trend={kpiData.timesheetCompliance >= 80 ? 'up' : 'down'}
-        trendValue="vs last week"
-        onClick={() => onCardClick('timesheetCompliance')}
+        label="Unaccounted Hours"
+        value={formatHours(kpis.unaccountedHours)}
+        subtitle="Present, zero ClickUp logged"
+        detail={`Across ${members.length} member${members.length !== 1 ? 's' : ''} this week`}
+        severity={kpis.unaccountedHours === 0 ? 'good' : kpis.unaccountedHours < 10 ? 'warn' : 'critical'}
+        icon={<Clock className="h-3 w-3" />}
+        onClick={() => onCardClick('unaccountedHours')}
       />
 
+      {/* 3 — High Divergence */}
       <KPICard
-        title="Present, Not Logged"
-        value={kpiData.presentNotLogged}
-        subtitle={
-          kpiData.presentNotLogged === 0
-            ? '✓ All present members logging'
-            : '🚨 Critical issue'
-        }
-        context="Members at office but not tracking time"
-        status={getCountStatus(kpiData.presentNotLogged)}
-        onClick={() => onCardClick('presentNotLogged')}
+        label="High Divergence"
+        value={String(kpis.highDivCount)}
+        subtitle="Members with >2h daily gap"
+        detail={nameList(kpis.highDivNames)}
+        severity={kpis.highDivCount === 0 ? 'good' : kpis.highDivCount <= 2 ? 'warn' : 'critical'}
+        icon={<TrendingDown className="h-3 w-3" />}
+        onClick={() => onCardClick('highDivergence')}
       />
 
+      {/* 4 — Streak Risk */}
       <KPICard
-        title="Avg Utilization"
-        value={`${kpiData.avgUtilization}%`}
-        subtitle={
-          kpiData.avgUtilization >= 70 && kpiData.avgUtilization <= 85
-            ? '✓ Healthy utilization'
-            : kpiData.avgUtilization < 60
-              ? '⚠ Underutilized'
-              : '⚠ Risk of burnout'
-        }
-        context="Average hours logged vs expected (70-85% ideal)"
-        status={getUtilizationStatus(kpiData.avgUtilization)}
-        trend={
-          kpiData.avgUtilization >= 70 && kpiData.avgUtilization <= 85
-            ? 'neutral'
-            : kpiData.avgUtilization < 70
-              ? 'down'
-              : 'up'
-        }
-        trendValue="vs last week"
-        onClick={() => onCardClick('avgUtilization')}
+        label="Streak Risk"
+        value={String(kpis.streakRiskCount)}
+        subtitle="Not logging despite attendance"
+        detail={nameList(kpis.streakRiskNames)}
+        severity={kpis.streakRiskCount === 0 ? 'good' : kpis.streakRiskCount <= 2 ? 'warn' : 'critical'}
+        icon={<AlertTriangle className="h-3 w-3" />}
+        onClick={() => onCardClick('streakRisk')}
       />
 
+      {/* 5 — Zero Log Days */}
       <KPICard
-        title="Over Capacity"
-        value={kpiData.overCapacity}
-        subtitle={
-          kpiData.overCapacity === 0
-            ? '✓ No burnout risk'
-            : '⚠ Hidden burnout risk'
-        }
-        context="Members logging >85% utilization"
-        status={getCountStatus(kpiData.overCapacity)}
-        onClick={() => onCardClick('overCapacity')}
+        label="Zero Log Days"
+        value={String(kpis.zeroLogDays)}
+        subtitle="Days: present, not logged"
+        detail="Individual present-but-zero instances"
+        severity={kpis.zeroLogDays === 0 ? 'good' : kpis.zeroLogDays <= 3 ? 'warn' : 'critical'}
+        icon={<Activity className="h-3 w-3" />}
+        onClick={() => onCardClick('zeroLogDays')}
       />
 
+      {/* 6 — Week Coverage */}
       <KPICard
-        title="Under Capacity"
-        value={kpiData.underCapacity}
+        label="Week Coverage"
+        value={`${kpis.weekCoverage}%`}
         subtitle={
-          kpiData.underCapacity === 0
-            ? '✓ Good capacity balance'
-            : '⚠ Review allocation'
+          kpis.weekCoverage === 100
+            ? 'Full week loaded'
+            : `${kpis.daysLoaded} of ${weekDayCount} days have data`
         }
-        context="Members logging <60% utilization"
-        status={getCountStatus(kpiData.underCapacity)}
-        onClick={() => onCardClick('underCapacity')}
+        detail={members.length > 0 ? `${members.length} members tracked` : undefined}
+        severity={kpis.weekCoverage === 100 ? 'good' : 'neutral'}
+        icon={<CalendarCheck className="h-3 w-3" />}
+        onClick={() => onCardClick('weekCoverage')}
       />
     </div>
   );

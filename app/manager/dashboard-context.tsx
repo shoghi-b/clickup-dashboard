@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { DateRange } from 'react-day-picker';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { startOfWeek, endOfWeek } from 'date-fns';
 
 interface DashboardStats {
     totalTeamMembers: number;
@@ -22,13 +22,26 @@ interface DashboardContextType {
     setDateRange: (range: DateRange | undefined) => void;
     viewMode: 'week' | 'month';
     setViewMode: (mode: 'week' | 'month') => void;
+
+    // MASTER visibility list — set once in Team Setup, persists to localStorage.
+    // Controls which members appear across ALL views in the app.
+    visibleMembers: string[];
+    setVisibleMembers: (members: string[] | ((prev: string[]) => string[])) => void;
+
+    // PER-VIEW filter — within visibleMembers, which to show data for right now.
+    // Defaults to all visibleMembers. Persists to localStorage per session.
     selectedMembers: string[];
     setSelectedMembers: (members: string[] | ((prev: string[]) => string[])) => void;
+
     teamMembers: TeamMember[];
     stats: DashboardStats;
+    weeklyKPIData: any;
     refreshData: () => Promise<void>;
     isLoading: boolean;
 }
+
+const MASTER_VISIBLE_KEY = 'master_visible_members';
+const PER_VIEW_SELECTED_KEY = 'manager_selected_members';
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
@@ -38,20 +51,53 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         to: endOfWeek(new Date(), { weekStartsOn: 1 }),
     });
     const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
-    const [selectedMembers, setSelectedMembers] = useState<string[]>(() => {
-        // Load from session storage on initial mount
+
+    // ── Master visibility (localStorage) ─────────────────────────────────────
+    const [visibleMembers, setVisibleMembersState] = useState<string[]>(() => {
         if (typeof window !== 'undefined') {
-            const saved = sessionStorage.getItem('manager_selected_members');
+            const saved = localStorage.getItem(MASTER_VISIBLE_KEY);
             if (saved) {
-                try {
-                    return JSON.parse(saved);
-                } catch (e) {
-                    console.error('Failed to parse saved members:', e);
-                }
+                try { return JSON.parse(saved); } catch { /* ignore */ }
             }
         }
         return [];
     });
+
+    const setVisibleMembers = (
+        value: string[] | ((prev: string[]) => string[])
+    ) => {
+        setVisibleMembersState((prev) => {
+            const next = typeof value === 'function' ? value(prev) : value;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(MASTER_VISIBLE_KEY, JSON.stringify(next));
+            }
+            return next;
+        });
+    };
+
+    // ── Per-view selected filter (localStorage) ────────────────────────────
+    const [selectedMembers, setSelectedMembersState] = useState<string[]>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(PER_VIEW_SELECTED_KEY);
+            if (saved) {
+                try { return JSON.parse(saved); } catch { /* ignore */ }
+            }
+        }
+        return [];
+    });
+
+    const setSelectedMembers = (
+        value: string[] | ((prev: string[]) => string[])
+    ) => {
+        setSelectedMembersState((prev) => {
+            const next = typeof value === 'function' ? value(prev) : value;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(PER_VIEW_SELECTED_KEY, JSON.stringify(next));
+            }
+            return next;
+        });
+    };
+
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [stats, setStats] = useState<DashboardStats>({
         totalTeamMembers: 0,
@@ -62,23 +108,31 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     const [weeklyKPIData, setWeeklyKPIData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Save selected members to session storage whenever it changes
-    useEffect(() => {
-        if (typeof window !== 'undefined' && selectedMembers.length > 0) {
-            sessionStorage.setItem('manager_selected_members', JSON.stringify(selectedMembers));
-        }
-    }, [selectedMembers]);
-
     // Initial load
     useEffect(() => {
         refreshData();
     }, []);
 
-    // Refresh stats when date range changes
+    // ── Keep selectedMembers ⊆ visibleMembers ─────────────────────────────
+    // Whenever the master visible list changes (e.g. a member is hidden in
+    // Team Setup), automatically remove them from the per-view selection too.
+    useEffect(() => {
+        if (visibleMembers.length === 0) return; // not yet loaded
+        setSelectedMembersState((prev) => {
+            const pruned = prev.filter(id => visibleMembers.includes(id));
+            // Only update if something actually changed
+            if (pruned.length === prev.length) return prev;
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(PER_VIEW_SELECTED_KEY, JSON.stringify(pruned));
+            }
+            return pruned;
+        });
+    }, [visibleMembers]);
+
+    // Refresh stats when date range or selected members change
     useEffect(() => {
         if (dateRange?.from && dateRange?.to) {
             fetchStats();
-            // Fetch KPI if not in "team" view (though viewMode logic is handled in components usually)
             if (viewMode === 'week') {
                 fetchWeeklyKPI();
             }
@@ -111,7 +165,6 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
             });
             const response = await fetch(`/api/weekly-kpi?${params}`);
             const result = await response.json();
-
             if (result.success) {
                 setWeeklyKPIData(result.data);
             }
@@ -125,14 +178,37 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
             const response = await fetch('/api/team-members');
             const result = await response.json();
             if (result.success) {
+                const allIds: string[] = result.data.map((m: TeamMember) => m.id);
                 setTeamMembers(result.data);
-                // Only auto-select if no saved selection AND current selection is empty
-                if (selectedMembers.length === 0) {
-                    // Check session storage one more time before auto-selecting
-                    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('manager_selected_members') : null;
-                    if (!saved) {
-                        setSelectedMembers(result.data.map((m: TeamMember) => m.id));
-                    }
+
+                // Bootstrap visibleMembers: if no master list is saved yet, default to ALL members.
+                const savedVisible = typeof window !== 'undefined'
+                    ? localStorage.getItem(MASTER_VISIBLE_KEY)
+                    : null;
+                if (!savedVisible) {
+                    setVisibleMembers(allIds);
+                }
+
+                // Bootstrap selectedMembers: always intersect with visibleMembers
+                // so that stale localStorage values (e.g. from before this feature)
+                // never include hidden members.
+                const savedSelected = typeof window !== 'undefined'
+                    ? localStorage.getItem(PER_VIEW_SELECTED_KEY)
+                    : null;
+                const effectiveVisible: string[] = savedVisible ? JSON.parse(savedVisible) : allIds;
+                if (savedSelected) {
+                    try {
+                        const parsed: string[] = JSON.parse(savedSelected);
+                        const pruned = parsed.filter(id => effectiveVisible.includes(id));
+                        // Persist the pruned value if it changed
+                        if (pruned.length !== parsed.length) {
+                            localStorage.setItem(PER_VIEW_SELECTED_KEY, JSON.stringify(pruned));
+                            setSelectedMembersState(pruned);
+                        }
+                    } catch { /* ignore parse error, leave state as-is */ }
+                } else {
+                    // No saved selection at all — seed from visible members
+                    setSelectedMembers(effectiveVisible);
                 }
             }
         } catch (error) {
@@ -153,6 +229,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
                 setDateRange,
                 viewMode,
                 setViewMode,
+                visibleMembers,
+                setVisibleMembers,
                 selectedMembers,
                 setSelectedMembers,
                 teamMembers,
@@ -174,19 +252,3 @@ export function useDashboard() {
     }
     return context;
 }
-
-// Update Interface
-interface DashboardContextType {
-    dateRange: DateRange | undefined;
-    setDateRange: (range: DateRange | undefined) => void;
-    viewMode: 'week' | 'month';
-    setViewMode: (mode: 'week' | 'month') => void;
-    selectedMembers: string[];
-    setSelectedMembers: (members: string[] | ((prev: string[]) => string[])) => void;
-    teamMembers: TeamMember[];
-    stats: DashboardStats;
-    weeklyKPIData: any;
-    refreshData: () => Promise<void>;
-    isLoading: boolean;
-}
-

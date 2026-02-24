@@ -16,7 +16,10 @@ import {
 } from '@/components/ui/popover';
 
 export default function WeeklyLogsPage() {
-    const { weeklyKPIData, dateRange, setDateRange, teamMembers, selectedMembers, setSelectedMembers, refreshData, isLoading } = useDashboard();
+    const { weeklyKPIData, dateRange, setDateRange, teamMembers, visibleMembers, selectedMembers, setSelectedMembers, refreshData, isLoading } = useDashboard();
+
+    // Only expose master-visible members in the per-view filter dropdown
+    const displayableMembers = teamMembers.filter(m => visibleMembers.includes(m.id));
 
     // Track client-side mounting to prevent hydration mismatch
     const [isMounted, setIsMounted] = useState(false);
@@ -35,12 +38,12 @@ export default function WeeklyLogsPage() {
     const [drillDownMetric, setDrillDownMetric] = useState<string>('');
     const [drillDownMembers, setDrillDownMembers] = useState<any[]>([]);
 
-    // Filtered team members based on search
+    // Filtered team members based on search — only from the master-visible set
     const filteredTeamMembers = useMemo(() => {
-        return teamMembers.filter((member) =>
+        return displayableMembers.filter((member) =>
             member.username.toLowerCase().includes(searchQuery.toLowerCase())
         );
-    }, [teamMembers, searchQuery]);
+    }, [displayableMembers, searchQuery]);
 
     const handleCardClick = (metric: string) => {
         if (!weeklyKPIData) return;
@@ -48,26 +51,44 @@ export default function WeeklyLogsPage() {
         let filteredMembers: any[] = [];
 
         switch (metric) {
+            case 'loggingAccuracy':
+            case 'unaccountedHours':
+                // Show all members sorted by worst accuracy
+                filteredMembers = [...weeklyKPIData.members].sort((a: any, b: any) => {
+                    const accA = a.days.reduce((s: number, d: any) => s + d.attendance, 0);
+                    const accB = b.days.reduce((s: number, d: any) => s + d.attendance, 0);
+                    const ratioA = accA > 0 ? a.total / accA : 1;
+                    const ratioB = accB > 0 ? b.total / accB : 1;
+                    return ratioA - ratioB; // worst first
+                });
+                break;
+            case 'highDivergence':
+                filteredMembers = weeklyKPIData.members.filter((m: any) =>
+                    m.days.some((d: any) => d.isPresent && d.attendance > 0 && (d.attendance - d.clickup) > 2)
+                );
+                break;
+            case 'streakRisk':
+                filteredMembers = weeklyKPIData.members.filter((m: any) =>
+                    m.days.some((d: any) => d.isPresent && d.clickup < 1)
+                );
+                break;
+            case 'zeroLogDays':
+                filteredMembers = weeklyKPIData.members.filter((m: any) =>
+                    m.days.some((d: any) => d.isPresent && d.clickup === 0)
+                );
+                break;
+            case 'weekCoverage':
+                filteredMembers = weeklyKPIData.members;
+                break;
+            // legacy fall-throughs kept for any older links
             case 'attendanceCompliance':
                 filteredMembers = weeklyKPIData.members.filter((m: any) => !m.attendanceCompliance);
                 break;
             case 'timesheetCompliance':
                 filteredMembers = weeklyKPIData.members.filter((m: any) => !m.timesheetCompliance);
                 break;
-            case 'presentNotLogged':
-                filteredMembers = weeklyKPIData.members.filter((m: any) =>
-                    m.days.some((d: any) => d.isPresent && d.clickup < 1)
-                );
-                break;
-            case 'avgUtilization':
+            default:
                 filteredMembers = weeklyKPIData.members;
-                break;
-            case 'overCapacity':
-                filteredMembers = weeklyKPIData.members.filter((m: any) => m.utilization > 85);
-                break;
-            case 'underCapacity':
-                filteredMembers = weeklyKPIData.members.filter((m: any) => m.utilization < 60);
-                break;
         }
 
         setDrillDownMetric(metric);
@@ -93,6 +114,7 @@ export default function WeeklyLogsPage() {
     };
 
     const handleSelectAll = () => {
+        // Select all visible members matching the search
         setSelectedMembers(filteredTeamMembers.map(m => m.id));
     };
 
@@ -123,7 +145,7 @@ export default function WeeklyLogsPage() {
         if (!isMounted) return 'Loading...';
 
         if (selectedMembers.length === 0) return 'No members selected';
-        if (selectedMembers.length === teamMembers.length) return 'All members';
+        if (selectedMembers.length === displayableMembers.length) return 'All visible members';
         return `${selectedMembers.length} member${selectedMembers.length > 1 ? 's' : ''} selected`;
     };
 
@@ -132,7 +154,7 @@ export default function WeeklyLogsPage() {
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Weekly Logs</h2>
-                    <p className="text-muted-foreground">Detailed weekly timesheet and attendance analysis.</p>
+                    <p className="text-muted-foreground">Design Ops · Timesheet × Attendance analysis</p>
                 </div>
                 <div className="flex items-center gap-2">
                     {/* Team Members Filter Dropdown */}
@@ -161,7 +183,7 @@ export default function WeeklyLogsPage() {
                                 {/* Header with Select/Deselect All */}
                                 <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/50">
                                     <span className="text-sm font-medium text-muted-foreground">
-                                        {teamMembers.length} People
+                                        {displayableMembers.length} Visible member{displayableMembers.length !== 1 ? 's' : ''}
                                     </span>
                                     <Button
                                         variant="ghost"
@@ -255,7 +277,12 @@ export default function WeeklyLogsPage() {
 
             {/* KPI Cards */}
             {weeklyKPIData && (
-                <WeeklyKPICards kpiData={weeklyKPIData.kpi} onCardClick={handleCardClick} />
+                <WeeklyKPICards
+                    kpiData={weeklyKPIData.kpi}
+                    members={weeklyKPIData.members ?? []}
+                    weekDayCount={5}
+                    onCardClick={handleCardClick}
+                />
             )}
 
             {/* Timesheet Grid */}
